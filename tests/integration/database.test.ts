@@ -5,6 +5,7 @@ import {randomUUID} from 'node:crypto';
 import {migrate} from '../../scripts/migrate';
 import {seed} from '../../scripts/seed';
 import {createLead,updateLead} from '@/server/leads';
+import {createBasicSession} from '@/server/auth';
 import {pool} from '@/server/db';
 import {validLead} from '../fixture';
 let db:pg.Client;
@@ -21,6 +22,11 @@ beforeAll(async()=>{
 afterAll(async()=>{await db?.end();await pool().end();});
 describe('PostgreSQL migration and CRM',()=>{
  it('migrates empty database and creates exactly 28 marked fixtures',async()=>{expect((await db.query('SELECT count(*)::int n FROM inventory_unit WHERE is_fixture')).rows[0].n).toBe(28);await migrate(process.env.DATABASE_URL!,true);});
+ it('creates an opaque server-side session for the built-in administrator',async()=>{
+  const token=await createBasicSession();
+  expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  expect((await db.query('SELECT count(*)::int n FROM staff_session')).rows[0].n).toBe(1);
+ });
  it('denies direct public and authenticated access to PII and pricing',async()=>{for(const role of ['anon','authenticated']){await db.query(`SET ROLE ${role}`);await expect(db.query('SELECT * FROM customer')).rejects.toThrow();await expect(db.query('SELECT * FROM pricing_version')).rejects.toThrow();await db.query('RESET ROLE');}});
  it('rejects blank serials and bad foreign keys',async()=>{
   const id=(await db.query('SELECT id FROM equipment LIMIT 1')).rows[0].id;

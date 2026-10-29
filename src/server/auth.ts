@@ -1,59 +1,46 @@
 import 'server-only';
-import {createHmac,timingSafeEqual} from 'node:crypto';
+import {createHash,randomBytes,scryptSync,timingSafeEqual} from 'node:crypto';
 import {cookies} from 'next/headers';
-import {createServerClient} from '@supabase/ssr';
 import {pool} from './db';
 import {HttpError} from './http';
-export type Staff={id:string;auth_user_id:string;role:'admin'|'operator'};
-export function isLocalAuth(){return process.env.APP_ENV==='development'&&process.env.AUTH_MODE==='local';}
-export function localRoleForEmail(email:string):Staff['role']|null{
- if(!isLocalAuth())return null;
- const normalized=email.trim().toLowerCase();
- if(normalized===(process.env.LOCAL_ADMIN_EMAIL||'admin@example.test').trim().toLowerCase())return 'admin';
- if(normalized===(process.env.LOCAL_OPERATOR_EMAIL||'operador@example.test').trim().toLowerCase())return 'operator';
- return null;
+
+export type Staff={id:string;auth_user_id:string|null;role:'admin'|'operator'};
+export const STAFF_SESSION_COOKIE='nk_staff_session';
+const DEFAULT_ADMIN_EMAIL='admin@sosadiazeventos.com';
+const PASSWORD_SALT='rentatech-basic-admin-v1';
+const DEFAULT_PASSWORD_HASH='8ebe0e3a9038b1af123e7cc7f24282ba84b9d54c555172031f356eed31ef37bac3d0c6001bc0307b253aaa07d68939aac6a7b853181b5eb23afe81253fdf60ac';
+
+export function basicAdminEmail(){return (process.env.BASIC_ADMIN_EMAIL||DEFAULT_ADMIN_EMAIL).trim().toLowerCase();}
+function passwordHash(value:string){return scryptSync(value,PASSWORD_SALT,64);}
+export function matchesBasicCredentials(email:string,password:string){
+ if(email.trim().toLowerCase()!==basicAdminEmail())return false;
+ const actual=passwordHash(password);
+ const expected=process.env.BASIC_ADMIN_PASSWORD?passwordHash(process.env.BASIC_ADMIN_PASSWORD):Buffer.from(DEFAULT_PASSWORD_HASH,'hex');
+ return actual.length===expected.length&&timingSafeEqual(actual,expected);
 }
-function secret(){const s=process.env.SESSION_SECRET;if(!s||s.length<32)throw new Error('SESSION_SECRET_REQUIRED');return s;}
-export function makeLocalSession(userId:string){
- if(!isLocalAuth())throw new Error('LOCAL_AUTH_DISABLED');
- const payload=Buffer.from(JSON.stringify({sub:userId,exp:Date.now()+8*3600000})).toString('base64url');
- return payload+'.'+createHmac('sha256',secret()).update(payload).digest('base64url');
+function tokenHash(token:string){return createHash('sha256').update(token).digest('hex');}
+export async function createBasicSession(){
+ const token=randomBytes(32).toString('base64url');
+ const result=await pool().query(`INSERT INTO public.staff_session(token_hash,staff_id,expires_at)
+  SELECT $1,id,now()+interval '8 hours' FROM public.staff_profile
+  WHERE login_email=$2 AND active=true AND role='admin' RETURNING staff_id`,[tokenHash(token),basicAdminEmail()]);
+ if(!result.rowCount)throw new HttpError(503,'BASIC_ADMIN_NOT_CONFIGURED','El administrador interno todavía no está configurado');
+ return token;
 }
-export function readLocalSession(value:string){
- if(!isLocalAuth())return null;
- try{const [p,s,...rest]=value.split('.');if(rest.length||!p||!s)return null;
- const expected=createHmac('sha256',secret()).update(p).digest();const actual=Buffer.from(s,'base64url');
- if(expected.length!==actual.length||!timingSafeEqual(expected,actual))return null;
- const data=JSON.parse(Buffer.from(p,'base64url').toString());return typeof data.sub==='string'&&data.exp>Date.now()?data.sub:null;
- }catch{return null;}
-}
-export async function supabaseServer(){
- const store=await cookies();const url=process.env.NEXT_PUBLIC_SUPABASE_URL,key=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
- if(!url||!key)throw new HttpError(503,'AUTH_NOT_CONFIGURED','El acceso del equipo todavía no está configurado');
- return createServerClient(url,key,{cookies:{
-  getAll:()=>store.getAll(),
-  setAll:items=>{try{items.forEach(({name,value,options})=>store.set(name,value,options));}catch{/* Server component: proxy refreshes cookies. */}}
- }});
+export async function revokeBasicSession(){
+ const store=await cookies();const token=store.get(STAFF_SESSION_COOKIE)?.value;
+ if(token)await pool().query('DELETE FROM public.staff_session WHERE token_hash=$1',[tokenHash(token)]);
+ store.delete(STAFF_SESSION_COOKIE);
 }
 export async function currentStaff():Promise<Staff|null>{
- let userId:string|null=null;
- if(isLocalAuth())userId=readLocalSession((await cookies()).get('nk_local_session')?.value||'');
- else {
-  if(!process.env.NEXT_PUBLIC_SUPABASE_URL)return null;
-  const client=await supabaseServer();const {data,error}=await client.auth.getUser();
-  if(error||!data.user)return null;userId=data.user.id;
-  if(process.env.APP_ENV==='production'){
-   const {data:claims}=await client.auth.getClaims();if(claims?.claims.aal!=='aal2')return null;
-  }
- }
- if(!userId)return null;
- const result=await pool().query<Staff>('SELECT id,auth_user_id,role FROM public.staff_profile WHERE auth_user_id=$1 AND active=true',[userId]);return result.rows[0]||null;
+ const token=(await cookies()).get(STAFF_SESSION_COOKIE)?.value;
+ if(!token||!/^[A-Za-z0-9_-]{43}$/.test(token))return null;
+ const result=await pool().query<Staff>(`SELECT p.id,p.auth_user_id,p.role
+  FROM public.staff_session s JOIN public.staff_profile p ON p.id=s.staff_id
+  WHERE s.token_hash=$1 AND s.expires_at>now() AND p.active=true`,[tokenHash(token)]);
+ return result.rows[0]||null;
 }
 export async function requireStaff(role?:'admin'){
  const staff=await currentStaff();if(!staff)throw new HttpError(401,'AUTH_REQUIRED','Inicia sesión para continuar');
  if(role&&staff.role!==role)throw new HttpError(403,'FORBIDDEN','Tu rol no permite esta acción');return staff;
-}
-export function matchesPassword(actual:string,expected:string|undefined){
- if(!isLocalAuth()||!expected)return false;
- const a=Buffer.from(actual),b=Buffer.from(expected);return a.length===b.length&&timingSafeEqual(a,b);
 }
