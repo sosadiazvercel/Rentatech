@@ -1,5 +1,5 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {errorResponse} from '@/server/http';
+import {errorResponse, HttpError} from '@/server/http';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -27,5 +27,14 @@ describe('Server error diagnostics', () => {
         errorResponse(Object.assign(new Error('secret'), {code: 'private-code'}));
         expect(log).toHaveBeenCalledWith('request_failed', expect.objectContaining({code: 'UNCLASSIFIED'}));
         expect(JSON.stringify(log.mock.calls)).not.toMatch(/secret|private-code/);
+    });
+
+    it('returns and logs a safe code for an expected service failure', async () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const response = errorResponse(new HttpError(503, 'AUTH_PROVIDER_UNAVAILABLE', 'No pudimos conectar con Supabase Auth.', {cause: new Error('secret')}));
+        const body = await response.json();
+        expect(body.error).toEqual({code: 'AUTH_PROVIDER_UNAVAILABLE', message: 'No pudimos conectar con Supabase Auth.'});
+        expect(log).toHaveBeenCalledWith('request_failed', expect.objectContaining({requestId: body.requestId, code: 'AUTH_PROVIDER_UNAVAILABLE'}));
+        expect(JSON.stringify(log.mock.calls)).not.toContain('secret');
     });
 });

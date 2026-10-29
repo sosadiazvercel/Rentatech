@@ -1,7 +1,11 @@
 import 'server-only';
 import { randomUUID, createHash } from 'node:crypto';
 import { pool } from './db';
-export class HttpError extends Error { constructor(public status: number, public code: string, message: string) { super(message); } }
+export class HttpError extends Error {
+    constructor(public status: number, public code: string, message: string, options?: { cause?: unknown }) {
+        super(message, options);
+    }
+}
 export function sameOrigin(req: Request) {
     const origin = req.headers.get('origin');
     if (!origin || origin !== new URL(process.env.APP_BASE_URL || 'http://127.0.0.1:3000').origin) throw new HttpError(403, 'ORIGIN_REJECTED', 'Solicitud no autorizada');
@@ -53,7 +57,10 @@ function failureDiagnostic(error: unknown, depth = 0): { code: string; hint: str
 }
 export function errorResponse(e: unknown) {
     const requestId = randomUUID();
-    if (e instanceof HttpError) return Response.json({ error: { code: e.code, message: e.message }, requestId }, { status: e.status });
+    if (e instanceof HttpError) {
+        if (e.status >= 500) console.error('request_failed', { requestId, code: e.code, ...(failureDiagnostic(e.cause) ?? {}) });
+        return Response.json({ error: { code: e.code, message: e.message }, requestId }, { status: e.status });
+    }
     console.error('request_failed', { requestId, ...(failureDiagnostic(e) ?? { code: 'UNCLASSIFIED' }) });
     return Response.json({ error: { code: 'SERVICE_UNAVAILABLE', message: 'No pudimos guardar los datos. Intenta de nuevo en unos minutos.' }, requestId }, { status: 503 });
 }
