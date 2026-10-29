@@ -22,6 +22,13 @@ beforeAll(async()=>{
 afterAll(async()=>{await db?.end();await pool().end();});
 describe('PostgreSQL migration and CRM',()=>{
  it('migrates empty database and creates exactly 28 marked fixtures',async()=>{expect((await db.query('SELECT count(*)::int n FROM inventory_unit WHERE is_fixture')).rows[0].n).toBe(28);await migrate(process.env.DATABASE_URL!,true);});
+ it('baselines a pre-existing contiguous schema when migration history is missing',async()=>{
+  await db.query("DELETE FROM staff_session; DROP TABLE staff_session; ALTER TABLE staff_profile DROP COLUMN login_email CASCADE; UPDATE staff_profile SET auth_user_id='00000000-0000-4000-8000-000000000001' WHERE id='00000000-0000-4000-8000-000000000011'; ALTER TABLE staff_profile ALTER COLUMN auth_user_id SET NOT NULL");
+  await db.query('TRUNCATE public.schema_migrations');
+  await migrate(process.env.DATABASE_URL!,true);
+  expect((await db.query('SELECT count(*)::int n FROM schema_migrations')).rows[0].n).toBe(7);
+  expect((await db.query("SELECT to_regclass('public.staff_session') IS NOT NULL ok")).rows[0].ok).toBe(true);
+ });
  it('creates an opaque server-side session for the built-in administrator',async()=>{
   const token=await createBasicSession();
   expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
