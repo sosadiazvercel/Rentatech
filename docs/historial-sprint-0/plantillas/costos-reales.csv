@@ -1,0 +1,9 @@
+concepto,unidad,costo_cop,impuesto_incluido,fuente_evidencia,fecha_validacion,responsable,observaciones
+tecnico,jornada,,,,,,
+tecnico,hora_extra,,,,,,
+transporte,ida_vuelta_zona,,,,,,
+preparacion,evento,,,,,,
+consumibles,visor,,,,,,
+contenido,licencia_evento,,,,,,
+pasarela,porcentaje_y_fijo,,,,,,
+comision,porcentaje_o_fijo,,,,,,

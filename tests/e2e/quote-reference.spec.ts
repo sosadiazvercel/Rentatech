@@ -1,0 +1,35 @@
+import {test,expect} from '@playwright/test';
+
+test('quote dates, live price summary and payment guidance follow the review flow',async({page})=>{
+ await page.setViewportSize({width:1280,height:900});await page.goto('/cotizar');
+ const date=page.getByLabel('Fecha del evento');
+ const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Bogota'});
+ await expect(date).toHaveAttribute('min',today);
+ await date.fill('2020-01-01');
+ await page.getByRole('button',{name:'Calcular disponibilidad'}).click();
+ await expect(page.getByRole('alert',{name:'Error del cotizador'})).toBeVisible();
+ await date.fill(new Date(Date.now()+60*86400000).toLocaleDateString('en-CA',{timeZone:'America/Bogota'}));
+ await page.getByRole('button',{name:'Calcular disponibilidad'}).click();
+ await expect(page.getByText('Tu cotización')).toBeVisible();
+ await expect(page.locator('aside')).toContainText('Visores');
+ await page.getByLabel('Dirección o lugar del evento').fill('Centro de convenciones');
+ await page.getByLabel('Sí, ya tengo contenido').check();
+ await expect(page.locator('aside')).toContainText('Configuracion de contenido');
+ await page.getByRole('button',{name:'Continuar'}).click();
+ await page.getByLabel('Nombre de contacto').fill('Prueba Cliente');
+ await page.getByLabel('Correo electronico').fill('qa@example.test');
+ await page.getByLabel('Telefono / WhatsApp').fill('+573001234567');
+ await page.getByRole('checkbox',{name:/Acepto el aviso/}).check();
+ await page.getByRole('button',{name:'Continuar'}).click();
+ await expect(page.getByRole('heading',{name:'Resumen de cotizacion'})).toBeVisible();
+ await expect(page.locator('aside')).toContainText('Meta Quest 3');
+ await expect(page.locator('main')).not.toContainText('Pagar en linea');
+ await page.screenshot({path:'test-results/quote-desktop.png',fullPage:true});
+ await page.setViewportSize({width:360,height:850});
+ await expect(page.locator('aside')).toBeVisible();
+ await expect(page.locator('aside')).toContainText('Total');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.screenshot({path:'test-results/quote-mobile.png',fullPage:true});
+ await page.goto('/pagos');
+ await expect(page.getByRole('heading',{name:/Paga después de recibir/})).toBeVisible();
+});

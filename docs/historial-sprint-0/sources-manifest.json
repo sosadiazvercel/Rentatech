@@ -1,0 +1,14 @@
+{
+  "sources": [
+    {
+      "path": "../sources/Plan_Maestro_Alquiler_Tecnologia_Eventos_v1.0.docx",
+      "sha256": "3D08B36D91FE43766EB573468E7B35E0237907640DE42DDB2537C399E62521EE",
+      "authority": "primary"
+    },
+    {
+      "path": "../sources/Deep_Search_Paso_1_Alquiler_Tecnologia_Colombia(1).pdf",
+      "sha256": "F58C73966D3576C4230FEFB9DF3B1FD1C1E93305EC54AF15C1F40F6BFB11C727",
+      "authority": "secondary"
+    }
+  ]
+}

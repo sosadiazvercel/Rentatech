@@ -1,0 +1,16 @@
+# Decisiones de implementación de Sprint 1
+
+27 septiembre 2026. Estas precisiones no cambian la oferta ni habilitan fases posteriores.
+
+1. **Entorno local reproducible.** PostgreSQL 17.10 real mediante wrapper de desarrollo, evitando exigir Docker. Supabase sigue siendo destino de staging/producción. Auth local con contraseñas aleatorias y cookies HMAC solo en desarrollo, para verificar el recorrido sin credenciales externas. No existe bypass por parámetro de URL.
+2. **Node compatible.** Se acepta Node 22–24; ejecución local con 24.18.0 disponible y CI configurado en 22. No se instala ni modifica runtime global.
+3. **Datos incompletos.** Campos estructurales inválidos (correo, fecha, cantidad, consentimiento) muestran errores y no se guardan. Contenido desconocido, ciudad fuera de cobertura, cantidades especiales o condiciones del recinto sin confirmar sí se capturan con revisión. Esta precisión resuelve la tensión entre “incompletos muestran error” de S1-05 y la captación asistida del MVP.
+4. **Sin autoridad de cotización.** El formulario no calcula importes ni consulta inventario. Técnico previsto = ceil(cantidad/5) es informativo y no confirma disponibilidad. Todas las solicitudes nuevas requieren validar recinto y derechos de contenido.
+5. **Captación por evento.** Un correo identifica al contacto de referencia. Cada oportunidad mantiene su propio snapshot de contacto y consentimiento; un formulario público repetido no sobrescribe identidad del customer. La atribución conserva primer/último toque conocido en ventana de 30 días por contacto; S1 aún no instala almacenamiento publicitario en navegador.
+6. **Idempotencia.** La respuesta pública contiene una referencia de lead sin datos personales. El token de continuación se almacena como hash y no se expone porque S1 no tiene operaciones públicas posteriores. La clave de reenvío, hash de body y resultado se guardan atómicamente.
+7. **CRM antes de reservas.** Etapas editables new/qualified/lost. quoted/won se reservan para eventos comerciales futuros; no se puede fabricar una venta manualmente. Valor estimado es entrada humana sin motor de pricing.
+8. **Dependencias.** Versiones exactas en package.json y lockfile. ESLint 9.39.5 se mantiene por compatibilidad de los plugins oficiales de Next 16.3.6; el registro lo marca fuera de soporte. Es herramienta de desarrollo, no runtime; revisar compatibilidad con ESLint 10 antes de siguiente actualización. No ignorar hallazgos de seguridad del runtime por esta decisión.
+9. **Registro histórico.** Audit y notas son append-only; snapshot de quote y pricing usado están protegidos. Falta implementar en S2 la validación transaccional de capacidad completa antes de confirmed. La mera existencia del esquema no implementa reservas.
+10. **Lanzamiento cerrado.** COMMERCIAL_ENABLED no activa ninguna funcionalidad en S1. Supabase remoto, invitación real, desafío MFA, condiciones fiscales/políticas y gates se verifican antes de producción. Los avisos de prueba y noindex permanecen activos.
+
+Referencias técnicas: [Next.js](https://nextjs.org/docs/app/getting-started/installation), [Supabase SSR](https://supabase.com/docs/guides/auth/server-side/creating-a-client), [embedded-postgres](https://github.com/leinelissen/embedded-postgres). Las fuentes de negocio siguen siendo PM y el paquete de Sprint 0.

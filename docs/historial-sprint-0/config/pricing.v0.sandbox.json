@@ -1,0 +1,65 @@
+{
+  "version": "0.1.0-sandbox",
+  "mode": "sandbox",
+  "production_enabled": false,
+  "currency": "COP",
+  "timezone": "America/Bogota",
+  "source": "PM sections 5, 6, 15; S0 assumptions S02-S13",
+  "standard": {
+    "city": "Bogota",
+    "indoor_only": true,
+    "single_venue": true,
+    "single_model": true,
+    "min_quantity": 2,
+    "max_quantity": 10,
+    "minimum_notice_hours": 72,
+    "event_start_local_min": "08:00",
+    "event_end_local_max": "20:00",
+    "base_hours": 4,
+    "max_hours": 8
+  },
+  "sale": {
+    "QUEST2_base_cop": 170000,
+    "QUEST3_base_cop": 290000,
+    "hardware_extra_hour_bps": 1500,
+    "technician_base_cop": 280000,
+    "technician_extra_hour_cop": 55000,
+    "transport_cop": 160000,
+    "setup_cop": 120000,
+    "simulated_tax_bps": 1900,
+    "deposit_bps": 5000
+  },
+  "capacity": {
+    "visors_per_technician": 5,
+    "visors_per_backup": 5,
+    "buffer_before_hours": 2,
+    "buffer_after_hours": 2,
+    "hold_minutes": 20,
+    "quote_valid_hours": 24
+  },
+  "simulated_costs": {
+    "technician_base_cop": 180000,
+    "technician_extra_hour_cop": 35000,
+    "transport_cop": 120000,
+    "preparation_cop": 60000,
+    "consumables_per_sold_visor_cop": 8000,
+    "content_cop": 0,
+    "commercial_commission_bps": 0,
+    "gateway_bps": 265,
+    "gateway_fixed_cop": 700,
+    "gateway_tax_bps": 1900,
+    "gateway_charge_count": 2
+  },
+  "gates": {
+    "min_contribution_margin_bps": 5500,
+    "max_cac_share_of_contribution_bps": 1500,
+    "real_costs_verified": false,
+    "tax_treatment_verified": false,
+    "inventory_verified": false,
+    "technicians_verified": false,
+    "content_rights_verified": false,
+    "commercial_policies_approved": false
+  },
+  "rounding": "COP integers; half-up per tax and gateway charge; deposit ceil; balance residual",
+  "balance_due_days_before_event": 2
+}
