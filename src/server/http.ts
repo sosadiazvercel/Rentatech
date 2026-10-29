@@ -8,7 +8,12 @@ export class HttpError extends Error {
 }
 export function sameOrigin(req: Request) {
     const origin = req.headers.get('origin');
-    if (!origin || origin !== new URL(process.env.APP_BASE_URL || 'http://127.0.0.1:3000').origin) throw new HttpError(403, 'ORIGIN_REJECTED', 'Solicitud no autorizada');
+    const allowed=new Set<string>([new URL(req.url).origin]);
+    const forwardedHost=(req.headers.get('x-forwarded-host')||req.headers.get('host'))?.split(',')[0]?.trim();
+    const forwardedProtocol=(req.headers.get('x-forwarded-proto')||new URL(req.url).protocol).split(',')[0].trim().replace(/:$/,'');
+    if(forwardedHost)try{allowed.add(new URL(`${forwardedProtocol}://${forwardedHost}`).origin);}catch{/* Invalid proxy header cannot authorize a request. */}
+    if(process.env.APP_BASE_URL)try{allowed.add(new URL(process.env.APP_BASE_URL).origin);}catch{/* Invalid optional override is ignored. */}
+    if (!origin || !allowed.has(origin)) throw new HttpError(403, 'ORIGIN_REJECTED', 'Solicitud no autorizada');
 }
 export async function jsonBody(req: Request, maxBytes = 16384) {
     if (!req.headers.get('content-type')?.startsWith('application/json')) throw new HttpError(400, 'INVALID_CONTENT_TYPE', 'Se requiere JSON');

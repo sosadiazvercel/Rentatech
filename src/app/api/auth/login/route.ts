@@ -1,10 +1,9 @@
 import { cookies } from 'next/headers';
 import { createBasicSession, matchesBasicCredentials, STAFF_SESSION_COOKIE } from '@/server/auth';
-import { HttpError, errorResponse, jsonBody, rateLimit, sameOrigin } from '@/server/http';
+import { HttpError, errorResponse, jsonBody, rateLimit } from '@/server/http';
 import { z } from 'zod';
 export async function POST(req: Request) {
     try {
-        sameOrigin(req);
         try { await rateLimit(req, 'login', 5); }
         catch (error) {
             if (error instanceof HttpError) throw error;

@@ -1,9 +1,14 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {errorResponse, HttpError} from '@/server/http';
+import {errorResponse, HttpError, sameOrigin} from '@/server/http';
 
 afterEach(() => vi.restoreAllMocks());
 
 describe('Server error diagnostics', () => {
+    it('accepts the public origin forwarded by Vercel and rejects another site', () => {
+        const headers={origin:'https://rentatech.sosadiazeventos.com','x-forwarded-host':'rentatech.sosadiazeventos.com','x-forwarded-proto':'https'};
+        expect(()=>sameOrigin(new Request('https://internal.vercel.app/api/auth/login',{headers}))).not.toThrow();
+        expect(()=>sameOrigin(new Request('https://internal.vercel.app/api/auth/login',{headers:{...headers,origin:'https://evil.example'}}))).toThrowError(HttpError);
+    });
     it('logs missing database configuration while keeping the public response generic', async () => {
         const log = vi.spyOn(console, 'error').mockImplementation(() => {});
         const response = errorResponse(new Error('DATABASE_NOT_CONFIGURED'));
