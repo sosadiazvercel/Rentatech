@@ -7,6 +7,7 @@ import './globals.css';
 export const metadata: Metadata = {
     title: { default: 'RENTA TECH · Realidad virtual', template: '%s · RENTA TECH' },
     description: 'Renta de Meta Quest 2 y Meta Quest 3 para eventos y experiencias de realidad virtual.',
+    icons: { icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }] },
     robots: { index: false, follow: false },
 };
 
