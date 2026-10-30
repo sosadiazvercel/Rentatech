@@ -21,6 +21,13 @@ beforeEach(()=>{
 afterEach(()=>{vi.unstubAllEnvs();vi.resetAllMocks();});
 
 describe('Quote submission route',()=>{
+ it('enables production submissions when the optional switch is not configured',async()=>{
+  vi.unstubAllEnvs();
+  vi.stubEnv('APP_ENV','production');
+  const response=await POST(request());
+  expect(response.status).toBe(201);
+  expect(mocks.createQuote).toHaveBeenCalledOnce();
+ });
  it('persists and confirms a quote in production when commercial intake is enabled',async()=>{
   vi.stubEnv('APP_ENV','production');
   const response=await POST(request());
@@ -29,7 +36,7 @@ describe('Quote submission route',()=>{
   expect(mocks.createQuote).toHaveBeenCalledWith(body,'12345678-1234-4123-8123-123456789012');
   expect(mocks.sendQuoteEmail).toHaveBeenCalledWith('00000000-0000-4000-8000-000000000099');
  });
- it('blocks submissions when the explicit commercial switch is disabled',async()=>{
+ it('blocks submissions only when the explicit commercial switch is false',async()=>{
   vi.stubEnv('COMMERCIAL_ENABLED','false');
   const response=await POST(request());
   expect(response.status).toBe(503);
