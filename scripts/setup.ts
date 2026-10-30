@@ -7,7 +7,7 @@ if(!existsSync('.env')){
   'APP_ENV=development','APP_BASE_URL=http://127.0.0.1:3000',
   `DATABASE_URL=postgresql://postgres:${secret()}@127.0.0.1:55432/nexokit_dev`,
   'DATABASE_SSL=false','AUTH_MODE=local','LOCAL_ADMIN_EMAIL=admin@sosadiazeventos.com','LOCAL_OPERATOR_EMAIL=operador@example.test',`LOCAL_ADMIN_PASSWORD=${secret()}`,`LOCAL_OPERATOR_PASSWORD=${secret()}`,
-  `SESSION_SECRET=${secret()}`,`TOKEN_SECRET=${secret()}`,'COMMERCIAL_ENABLED=false','NEXT_TELEMETRY_DISABLED=1'
+  `SESSION_SECRET=${secret()}`,`TOKEN_SECRET=${secret()}`,'COMMERCIAL_ENABLED=true','NEXT_TELEMETRY_DISABLED=1'
  ].join('\n')+'\n',{mode:0o600});
 }
 const env=parse(readFileSync('.env'));

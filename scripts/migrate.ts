@@ -47,7 +47,8 @@ export async function migrate(url: string, local = false) {
  } finally { await db.query("SELECT pg_advisory_unlock(hashtext('rentatech_schema_migrations'))").catch(()=>{});await db.end(); }
 }
 if(process.argv[1]?.replaceAll('\\','/').endsWith('/migrate.ts')) {
- if(!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required');
- await migrate(process.env.DATABASE_URL,process.argv.includes('--local'));
+ const migrationUrl=process.env.MIGRATION_DATABASE_URL||process.env.DATABASE_URL;
+ if(!migrationUrl) throw new Error('MIGRATION_DATABASE_URL or DATABASE_URL is required');
+ await migrate(migrationUrl,process.argv.includes('--local'));
  console.log('Migrations applied.');
 }

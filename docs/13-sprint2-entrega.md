@@ -51,7 +51,7 @@ Hasta completar transporte, impuestos, buffers y tarifas aplicables, el resumen 
 
 ## Límites explícitos
 
-Continúa como entorno local de prueba sin publicación comercial. Los endpoints de captación comercial permanecen bloqueados en APP_ENV=production hasta preparar el lanzamiento, las políticas y el acceso de producción. No se ha configurado Supabase hospedado/MFA ni proveedor de email; este último tiene outbox sin envíos y estado not_configured. No se enviaron mensajes a clientes.
+La recepción de cotizaciones funciona en desarrollo y producción cuando `COMMERCIAL_ENABLED=true`. Cada solicitud se confirma únicamente después de persistirse en PostgreSQL/Supabase. El correo transaccional requiere `RESEND_API_KEY`, `EMAIL_FROM` y `EMAIL_NOTIFICATION_TO`; si falta o falla, la cotización permanece guardada y el outbox registra el estado para revisión.
 
 Pasarela, WhatsApp, contratos, firma, automatizaciones logísticas, upsells y contenido avanzado no implementados conforme a prioridades del nuevo brief. VRExperience tiene estructura de compatibilidad/licencias y no publica experiencias no verificadas. Los incidentes tienen estructura para fotos; no se implementó carga de archivos.
 

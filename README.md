@@ -74,7 +74,7 @@ Las pruebas de integración reconstruyen `nexokit_test` y `rentatech_sprint2_tes
 
 El login usa `admin@sosadiazeventos.com` y la contraseña acordada, validada en servidor mediante scrypt, sin Supabase Auth. Funciona en local y producción. `BASIC_ADMIN_EMAIL` y `BASIC_ADMIN_PASSWORD` son overrides opcionales: dejarlos vacíos o sin configurar para usar el acceso acordado. `AUTH_MODE` y `LOCAL_*` no controlan este login.
 
-En Vercel configurar `DATABASE_URL` con la conexión PostgreSQL de Supabase (usar el pooler si la conexión directa no es accesible), `DATABASE_SSL=true` y `APP_BASE_URL=https://<dominio-del-sitio>`. Conservar las demás variables del negocio. `pnpm build` aplica las migraciones antes de compilar: `0007_basic_staff_auth.sql` crea el administrador y la tabla de sesiones sin requerir usuarios en Supabase Auth. No ejecutar `setup:local`, `db:start` ni migraciones con `--local` contra Supabase. Si se cambia el correo mediante un override, también debe existir un perfil administrador activo con ese `login_email`.
+En Vercel configurar `DATABASE_URL` con la conexión **Transaction pooler** de Supabase (puerto 6543), `MIGRATION_DATABASE_URL` con la conexión directa o **Session pooler** (puerto 5432), `DATABASE_SSL=true`, `APP_BASE_URL=https://<dominio-del-sitio>` y `COMMERCIAL_ENABLED=true`. Aplicar las variables a Production, Preview y Development según corresponda y volver a desplegar. `pnpm build` aplica las migraciones usando `MIGRATION_DATABASE_URL`; `0007_basic_staff_auth.sql` crea el administrador y la tabla de sesiones sin requerir usuarios en Supabase Auth. No ejecutar `setup:local`, `db:start` ni migraciones con `--local` contra Supabase. Si se cambia el correo mediante un override, también debe existir un perfil administrador activo con ese `login_email`.
 
 Las sesiones duran 8 horas y se guardan en la base compartida para funcionar entre instancias de Vercel. La cookie es HttpOnly y SameSite Strict; en producción también es Secure y requiere HTTPS. Cerrar sesión revoca el token. Los datos del administrador, productos, operaciones y solicitudes conservan su persistencia actual en Supabase.
 
@@ -82,7 +82,7 @@ Las consultas SQL se hacen únicamente en servidor con credencial privilegiada p
 
 El acceso del administrador no requiere configurar Supabase Auth, invitaciones ni MFA. La base de datos de Supabase debe estar accesible y tener las migraciones aplicadas.
 
-Captación comercial rechazada si `APP_ENV=production`; todas las páginas llevan noindex. Políticas visibles son avisos de prueba, no términos legales aprobados. No se reciben pagos ni se instalan trackers. Los límites de envío/login se guardan en DB; fuera de Vercel el bucket es global por instancia lógica local, deliberadamente conservador hasta configurar proxy confiable.
+La recepción de cotizaciones se habilita con `COMMERCIAL_ENABLED=true` tanto en local como en Vercel. El servidor solo confirma una solicitud después de guardarla en PostgreSQL/Supabase; una falla de base de datos devuelve error y nunca muestra una cotización local ficticia como guardada. El correo es opcional: si Resend falla, la cotización permanece guardada y el envío queda registrado para revisión. No se reciben pagos ni se instalan trackers. Los límites de envío/login se guardan en DB.
 
 ## Entrega al programador
 
