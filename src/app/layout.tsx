@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Script from 'next/script';
 import { SiteHeader } from '@/components/site-header';
 import { getPublicProducts } from '@/server/public-products';
 import './globals.css';
@@ -26,5 +27,19 @@ export default async function Layout({ children }: { children: React.ReactNode }
                 <Link href="/admin">Acceso equipo</Link>
             </nav>
         </div></footer>
+        <Script src="https://www.googletagmanager.com/gtag/js?id=G-MWNJE326EW" strategy="afterInteractive" />
+        <Script id="google-analytics" strategy="afterInteractive">{`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-MWNJE326EW');
+        `}</Script>
+        <Script id="microsoft-clarity" strategy="afterInteractive">{`
+            (function(c,l,a,r,i,t,y){
+                c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+                t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+                y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+            })(window, document, "clarity", "script", "z5hkz2pozt");
+        `}</Script>
     </body></html>;
 }

@@ -82,7 +82,7 @@ Las consultas SQL se hacen únicamente en servidor con credencial privilegiada p
 
 El acceso del administrador no requiere configurar Supabase Auth, invitaciones ni MFA. La base de datos de Supabase debe estar accesible y tener las migraciones aplicadas.
 
-La recepción de cotizaciones se habilita con `COMMERCIAL_ENABLED=true` tanto en local como en Vercel. El servidor solo confirma una solicitud después de guardarla en PostgreSQL/Supabase; una falla de base de datos devuelve error y nunca muestra una cotización local ficticia como guardada. El correo es opcional: si Resend falla, la cotización permanece guardada y el envío queda registrado para revisión. No se reciben pagos ni se instalan trackers. Los límites de envío/login se guardan en DB.
+La recepción de cotizaciones se habilita con `COMMERCIAL_ENABLED=true` tanto en local como en Vercel. El servidor solo confirma una solicitud después de guardarla en PostgreSQL/Supabase; una falla de base de datos devuelve error y nunca muestra una cotización local ficticia como guardada. El correo es opcional: si Resend falla, la cotización permanece guardada y el envío queda registrado para revisión. El sitio integra Google Analytics (`G-MWNJE326EW`) y Microsoft Clarity (`z5hkz2pozt`) en el layout global. No se reciben pagos. Los límites de envío/login se guardan en DB.
 
 ## Entrega al programador
 
