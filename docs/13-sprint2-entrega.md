@@ -51,7 +51,7 @@ Hasta completar transporte, impuestos, buffers y tarifas aplicables, el resumen 
 
 ## Límites explícitos
 
-La recepción de cotizaciones funciona por defecto en desarrollo y producción; solo `COMMERCIAL_ENABLED=false` la deshabilita. Cada solicitud se confirma únicamente después de persistirse en PostgreSQL/Supabase. El correo transaccional requiere `RESEND_API_KEY`, `EMAIL_FROM` y `EMAIL_NOTIFICATION_TO`; si falta o falla, la cotización permanece guardada y el outbox registra el estado para revisión.
+La recepción de cotizaciones está activa en desarrollo y producción sin interruptores de entorno. Cada solicitud se confirma únicamente después de persistirse en PostgreSQL/Supabase. El correo transaccional requiere `RESEND_API_KEY`, `EMAIL_FROM` y `EMAIL_NOTIFICATION_TO`; si falta o falla, la cotización permanece guardada y el outbox registra el estado para revisión.
 
 Pasarela, WhatsApp, contratos, firma, automatizaciones logísticas, upsells y contenido avanzado no implementados conforme a prioridades del nuevo brief. VRExperience tiene estructura de compatibilidad/licencias y no publica experiencias no verificadas. Los incidentes tienen estructura para fotos; no se implementó carga de archivos.
 
