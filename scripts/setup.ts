@@ -13,5 +13,5 @@ if(!existsSync('.env')){
 const env=parse(readFileSync('.env'));
 if(env.APP_ENV!=='development'||env.AUTH_MODE!=='local')throw new Error('Existing environment is not local development. Left unchanged.');
 mkdirSync('.local',{recursive:true});
-writeFileSync('.local/ACCESO.md',`# Acceso privado al CRM local\n\nSolo funciona en el entorno de desarrollo. No compartir ni versionar.\n\nDirección: http://127.0.0.1:3000/acceso\n\nAdministrador: ${env.LOCAL_ADMIN_EMAIL||'admin@example.test'}\n\nContraseña: ${env.LOCAL_ADMIN_PASSWORD}\n\nOperador: ${env.LOCAL_OPERATOR_EMAIL||'operador@example.test'}\n\nContraseña: ${env.LOCAL_OPERATOR_PASSWORD}\n`,{mode:0o600});
+writeFileSync('.local/ACCESO.md',`# Acceso privado al CRM\n\nURL: http://127.0.0.1:3000/acceso\n\nCorreo: ${env.BASIC_ADMIN_EMAIL||'admin@sosadiazeventos.com'}\n\nPassword: ${env.BASIC_ADMIN_PASSWORD||'Usar la clave acordada del administrador.'}\n\nEl acceso basico funciona en local y en produccion. Las variables LOCAL_* no controlan el login.\n`,{mode:0o600});
 console.log('Entorno local listo. Credenciales en .local/ACCESO.md; no se imprimen secretos.');

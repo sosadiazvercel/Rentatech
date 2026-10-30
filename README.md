@@ -28,7 +28,7 @@ Dejar la base funcionando. En otra terminal, dentro de esta carpeta:
 pnpm dev
 ```
 
-Abrir `http://127.0.0.1:3000`. Completar el cotizador con datos ficticios. Tras enviarlo, entrar a Operaciones en `/admin`. Las credenciales aleatorias locales están en `.local/ACCESO.md`, excluidas de Git. El script nunca sobrescribe `.env` existente ni imprime secretos.
+Abrir `http://127.0.0.1:3000`. Completar el cotizador con datos ficticios. Tras enviarlo, entrar a Operaciones en `/admin`. El acceso usa el correo del administrador y la clave acordada. El script nunca sobrescribe `.env` existente ni imprime secretos.
 
 `db:start` ejecuta PostgreSQL 17.10 en loopback, puerto 55432, persistente en `.local/postgres`; aplica migraciones y crea fixtures marcados y aplica la carga de los 29 activos declarados en Sprint 2. Ctrl+C lo detiene. No instala un servicio de Windows ni modifica bases externas. El wrapper `embedded-postgres` tiene versión beta y se usa solo en desarrollo, nunca en producción.
 
@@ -47,7 +47,7 @@ Usar **127.0.0.1**, igual que APP_BASE_URL. La protección de origen rechaza dom
 - Formulario validado en navegador y servidor; soporte presencial obligatorio, solicitudes especiales a revisión y consentimientos separados.
 - Persistencia PostgreSQL: contacto deduplicado por correo y una oportunidad por evento. Reenvío con misma clave no duplica; misma clave y datos diferentes devuelve conflicto. Una nueva solicitud no sobrescribe identidad de un contacto existente.
 - CRM protegido: listado paginado, filtro de etapa, detalle, responsable, valor estimado manual, próxima acción, motivo de pérdida y notas con auditoría.
-- Auth Supabase preparado para personal invitado y credenciales locales aleatorias únicamente en `APP_ENV=development`. No hay registro público ni rol enviado por el navegador.
+- Login del administrador con credenciales basicas y sesiones guardadas en PostgreSQL/Supabase.
 - Migración del modelo S0 completo, FK/CHECK, exclusión de intervalos, RLS sin acceso directo público, snapshots y registros históricos protegidos.
 - Tarjetas internas de estados de ejemplo: estimación, revisión y confirmación claramente ficticia. Las pantallas demo históricas siguen rotuladas. El sitio público ya utiliza el motor de Sprint 2 y tarifas configurables.
 - Configuración y CI, pruebas de validación, autenticación, integridad SQL y recorrido en navegador.
@@ -72,11 +72,15 @@ Las pruebas de integración reconstruyen `nexokit_test` y `rentatech_sprint2_tes
 
 ## Supabase y seguridad
 
-Para un staging privado, configurar `AUTH_MODE=supabase`, URL/anon key y `DATABASE_URL` servidor. Aplicar migraciones sin `--local`. Crear el usuario mediante invitación de Supabase y una fila `staff_profile` activa vinculada a su UUID. El login solo admite personal con ese perfil. No hace falta `service_role` en el navegador.
+El login usa `admin@sosadiazeventos.com` y la contraseña acordada, validada en servidor mediante scrypt, sin Supabase Auth. Funciona en local y producción. `BASIC_ADMIN_EMAIL` y `BASIC_ADMIN_PASSWORD` son overrides opcionales: dejarlos vacíos o sin configurar para usar el acceso acordado. `AUTH_MODE` y `LOCAL_*` no controlan este login.
+
+En Vercel configurar `DATABASE_URL` con la conexión PostgreSQL de Supabase (usar el pooler si la conexión directa no es accesible), `DATABASE_SSL=true` y `APP_BASE_URL=https://<dominio-del-sitio>`. Conservar las demás variables del negocio. `pnpm build` aplica las migraciones antes de compilar: `0007_basic_staff_auth.sql` crea el administrador y la tabla de sesiones sin requerir usuarios en Supabase Auth. No ejecutar `setup:local`, `db:start` ni migraciones con `--local` contra Supabase. Si se cambia el correo mediante un override, también debe existir un perfil administrador activo con ese `login_email`.
+
+Las sesiones duran 8 horas y se guardan en la base compartida para funcionar entre instancias de Vercel. La cookie es HttpOnly y SameSite Strict; en producción también es Secure y requiere HTTPS. Cerrar sesión revoca el token. Los datos del administrador, productos, operaciones y solicitudes conservan su persistencia actual en Supabase.
 
 Las consultas SQL se hacen únicamente en servidor con credencial privilegiada privada. Por ello cada página y API administrativa verifica sesión y rol antes de acceder a datos. RLS y revocación de permisos impiden acceso directo de anon/authenticated a tablas. Una credencial SQL filtrada es crítica: usar gestor de secretos y rotación antes de producción.
 
-Supabase Auth integrado en código; su servicio hospedado no está configurado ni probado con una cuenta real en este sprint. En producción se exige AAL2 y el formulario actual no incluye el desafío MFA: el lanzamiento permanece bloqueado hasta completar y probar ese acceso. El modo local está deshabilitado fuera de desarrollo.
+El acceso del administrador no requiere configurar Supabase Auth, invitaciones ni MFA. La base de datos de Supabase debe estar accesible y tener las migraciones aplicadas.
 
 Captación comercial rechazada si `APP_ENV=production`; todas las páginas llevan noindex. Políticas visibles son avisos de prueba, no términos legales aprobados. No se reciben pagos ni se instalan trackers. Los límites de envío/login se guardan en DB; fuera de Vercel el bucket es global por instancia lógica local, deliberadamente conservador hasta configurar proxy confiable.
 
