@@ -42,8 +42,14 @@ export async function migrate(url: string, local = false) {
   for(const file of files) {
    if((await db.query('SELECT 1 FROM public.schema_migrations WHERE name=$1',[file])).rowCount) continue;
    await db.query('BEGIN');
-   try { await db.query(await readFile(`supabase/migrations/${file}`,'utf8')); await db.query('INSERT INTO public.schema_migrations(name) VALUES($1)',[file]); await db.query('COMMIT'); }
-   catch(e) { await db.query('ROLLBACK'); throw e; }
+   const sql=await readFile(`supabase/migrations/${file}`,'utf8');
+   try { await db.query(sql); await db.query('INSERT INTO public.schema_migrations(name) VALUES($1)',[file]); await db.query('COMMIT'); }
+   catch(e) {
+    await db.query('ROLLBACK');
+    const error=e as {code?:string;position?:string};
+    console.error('Migration failed',{file,code:error.code,line:error.position?sql.slice(0,Number(error.position)-1).split('\n').length:undefined});
+    throw e;
+   }
   }
  } finally { await db.query("SELECT pg_advisory_unlock(hashtext('rentatech_schema_migrations'))").catch(()=>{});await db.end(); }
 }

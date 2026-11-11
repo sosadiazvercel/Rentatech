@@ -1,4 +1,7 @@
 -- Commercial follow-up is separate from inventory allocation and payment movements.
+-- Some existing installations recorded 0005 before the email lease column was added.
+-- Repair that older schema before updating email delivery state; preserve existing rows.
+ALTER TABLE public.notification_outbox ADD COLUMN IF NOT EXISTS locked_until timestamptz;
 ALTER TABLE public.lead DROP CONSTRAINT IF EXISTS lead_stage_check;
 ALTER TABLE public.lead DROP CONSTRAINT IF EXISTS lead_check;
 ALTER TABLE public.lead DROP CONSTRAINT IF EXISTS lost_requires_reason;
