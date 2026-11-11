@@ -16,7 +16,7 @@ export function EmailStatuses({emails,configured,isAdmin,onRefresh}:{emails:Emai
   <div className="stack">{emails.map(mail=><article className="card" key={mail.id}>
    <strong>{mail.number}</strong><p>{labels[mail.status]??mail.status} · Intentos: {mail.attempts}</p>
    {mail.last_error&&<p>{mail.last_error}</p>}
-   {isAdmin&&configured&&!['sent','review_required'].includes(mail.status)&&<button className="button secondary compact" disabled={busy} onClick={()=>void retry(mail.quote_id)}>Reintentar correo de {mail.number}</button>}
+   {isAdmin&&configured&&!['sent','superseded','review_required'].includes(mail.status)&&<button className="button secondary compact" disabled={busy} onClick={()=>void retry(mail.quote_id)}>Reintentar correo de {mail.number}</button>}
   </article>)}</div>
  </section>;
 }

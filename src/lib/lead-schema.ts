@@ -34,9 +34,12 @@ export function reviewReasons(v:LeadInput,now=Date.now()) {
  if(v.customerType==='private')reasons.push('Evento particular');
  return reasons;
 }
-export const stageLabels={new:'Nueva',qualified:'Calificada',quoted:'Cotizada',won:'Ganada',lost:'Perdida'} as const;
+export const stageLabels={new:'Nueva solicitud',quoted:'Cotizado',lost:'Perdido',awaiting_payment:'Por pagar',confirmed:'Confirmado',completed:'Finalizado'} as const;
+export const processStages=['new','quoted','awaiting_payment','confirmed','completed'] as const;
 export const leadUpdateSchema=z.object({
- stage:z.enum(['new','qualified','lost']), ownerId:z.uuid().nullable(),
+ stage:z.enum(['new','quoted','lost','awaiting_payment','confirmed','completed']), expectedVersion:z.number().int().nonnegative(), ownerId:z.uuid().nullable(),
  estimatedValue:z.number().int().nonnegative().max(1000000000).nullable(),
- nextAction:z.iso.datetime({offset:true}).nullable(), lossReason:z.string().trim().max(1000), note:z.string().trim().max(4000)
-}).strict().refine(v=>v.stage!=='lost'||v.lossReason.length>0,{path:['lossReason'],message:'Indica el motivo de pérdida'});
+ paymentUrl:z.union([z.literal(''),z.url().max(2000).refine(v=>new URL(v).protocol==='https:','Usa un enlace HTTPS')]).default(''),
+ paymentReference:z.string().trim().max(180).default(''), paymentConfirmed:z.boolean().default(false),
+ note:z.string().trim().max(4000), attachment:z.object({filename:z.string().min(1).max(180),content:z.string().max(6990508)}).strict().optional()
+}).strict();

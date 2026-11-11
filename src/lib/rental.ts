@@ -45,13 +45,13 @@ export const eventSchema=z.object({
 });
 
 export const requestSchema=eventSchema.safeExtend({
- address:z.string().trim().min(1,'Escribe la direccion o lugar del evento').max(500),
+ address:z.string().trim().min(1,'Escribe la direccion o lugar del alquiler').max(500),
  name:z.string().trim().min(2,'Escribe el nombre del contacto').max(180),
  company:z.string().trim().max(180),
  email:z.email('Escribe un correo valido').trim().toLowerCase().max(254),
  phone:z.string().regex(/^\+[1-9]\d{7,14}$/,'Incluye codigo de pais, por ejemplo +573001234567'),
  notes:z.string().trim().max(2000),
- nit:z.string().trim().max(40),
+ nit:z.string().trim().min(1,'Escribe el NIT o la cédula').max(40),
  privacy:z.literal(true,{error:'Acepta el aviso de privacidad'}),
 }).strict();
 

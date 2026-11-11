@@ -9,7 +9,7 @@ import {pool} from '@/server/db';
 import type {RentalRequest,Rules} from '@/lib/rental';
 const staff={id:'00000000-0000-4000-8000-000000000011',auth_user_id:'00000000-0000-4000-8000-000000000001',role:'admin' as const};
 const event={equipment:'QUEST3',quantity:3,days:1,date:'2031-10-16',start:'10:00',durationHours:8,city:'Bogotá',address:'Recinto QA',contentStatus:'ready' as const};
-const request:RentalRequest={...event,name:'Prueba de alquiler',company:'QA ficticia',email:'rental@example.test',phone:'+573001234567',nit:'',notes:'Datos de prueba',privacy:true};
+const request:RentalRequest={...event,name:'Prueba de alquiler',company:'QA ficticia',email:'rental@example.test',phone:'+573001234567',nit:'900123456',notes:'Datos de prueba',privacy:true};
 let db:pg.Client;const techs:string[]=[];let rules:Rules;
 beforeAll(async()=>{
  const url=new URL(process.env.DATABASE_URL!);if(!['localhost','127.0.0.1'].includes(url.hostname))throw Error('Local DB only');url.pathname='/rentatech_sprint2_test';const adminUrl=new URL(url);adminUrl.pathname='/postgres';const admin=new pg.Client({connectionString:adminUrl.toString()});await admin.connect();if(!(await admin.query("SELECT 1 FROM pg_database WHERE datname='rentatech_sprint2_test'")).rowCount)await admin.query('CREATE DATABASE rentatech_sprint2_test');await admin.end();

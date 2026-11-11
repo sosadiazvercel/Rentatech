@@ -5,10 +5,18 @@ import {z} from 'zod';
 import {pool,transaction} from './db';
 import {HttpError} from './http';
 import {emailConfigured} from './email';
+import {stageMail} from '@/lib/lead-email';
 import type {CatalogProduct} from '@/lib/catalog';
 import type {Staff} from './auth';
 import {calculate,eventSchema,requestSchema,rulesSchema,type Rules,type RentalEvent,type RentalRequest,type Overrides,type Estimate} from '@/lib/rental';
 type DB=Pick<pg.PoolClient,'query'>;
+async function syncLeadStage(db:DB,id:string,stage:string,reference=''){
+ const lead=(await db.query('SELECT * FROM lead WHERE id=$1 FOR UPDATE',[id])).rows[0];
+ if(!lead||lead.stage===stage)return;
+ const version=lead.stage_version+1;
+ await db.query('UPDATE lead SET stage=$2,stage_version=$3,payment_reference=CASE WHEN $4=\'\' THEN payment_reference ELSE $4 END WHERE id=$1',[id,stage,version,reference]);
+ if(['confirmed','completed'].includes(stage))await db.query("INSERT INTO notification_outbox(lead_id,channel,kind,payload,event_key) VALUES($1,'email',$2,$3,$4)",[id,stage,JSON.stringify(stageMail(stage,lead.request,id,lead.payment_url)),`lead/${id}/${version}`]);
+}
 const hash=(s:string)=>createHash('sha256').update(s).digest('hex');
 function fail(message:string,status=422):never{throw new HttpError(status,'RENTAL_ERROR',message);}
 function parse<T>(schema:z.ZodType<T>,value:unknown):T{const p=schema.safeParse(value);if(!p.success)fail(p.error.issues.map(i=>i.message).join('. '));return p.data;}
@@ -56,7 +64,7 @@ export async function createQuote(raw:unknown,key:string){
   await db.query(`INSERT INTO lead(id,customer_id,request,source,privacy_version,privacy_accepted_at,continuation_token_hash,continuation_expires_at) VALUES($1,$2,$3,'web','sprint2-local-v1',now(),$4,now()+interval '7 days')`,[leadId,customer.id,JSON.stringify({...v,end:p.end.toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'2-digit',minute:'2-digit',hour12:false})}),hash(randomUUID())]);
   const result=await saveQuote(db,v,leadId,1);
   await db.query('INSERT INTO internal_notification(quote_id,message) VALUES($1,$2)',[result.id,`Nueva solicitud ${result.number}`]);
-  await db.query("INSERT INTO notification_outbox(quote_id,channel) VALUES($1,'email')",[result.id]);
+  await db.query("INSERT INTO notification_outbox(quote_id,channel,kind,event_key) VALUES($1::uuid,'email','initial_customer','quote-customer/'||($1::uuid)::text),($1::uuid,'email','initial_admin','quote-admin/'||($1::uuid)::text)",[result.id]);
   await db.query("INSERT INTO command_receipt(scope,actor_key,request_key,request_hash,result_private,status) VALUES('quote','public',$1,$2,$3,'complete')",[key,digest,JSON.stringify(result)]);
   await audit(db,null,'quote',result.id,'requested');return result;
  });
@@ -120,7 +128,9 @@ export async function mutate(raw:unknown,staff:Staff){
    if(!snap.complete)fail('Completa transporte, impuestos, buffers y tarifas mediante una revisión antes de confirmar');
    if(v.received<Number(q.deposit_cop)||v.received>Number(q.total_cop))fail('El pago registrado debe cubrir el anticipo y no superar el total');
    const p=period(snap.event,snap.rules);if(p.start<=new Date())fail('El evento ya comenzó');
+   await db.query('SELECT id FROM lead WHERE id=$1 FOR UPDATE',[q.lead_id]);
    await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',['inventory:'+q.equipment_id]);
+   await db.query('UPDATE unit_allocation SET active=false WHERE lead_id=$1',[q.lead_id]);
    const units=(await db.query(`SELECT u.id FROM inventory_unit u WHERE u.equipment_id=$1 AND u.status='ready' AND NOT u.is_fixture AND NOT EXISTS(SELECT 1 FROM unit_allocation a WHERE a.inventory_unit_id=u.id AND a.active AND a.period && tstzrange($2,$3,'[)')) ORDER BY u.asset_tag LIMIT $4 FOR UPDATE OF u`,[q.equipment_id,p.from,p.to,q.quantity])).rows;
    if(units.length!==q.quantity)fail('La disponibilidad cambió; no hay suficientes equipos. No se confirmó la reserva.',409);
    const id=randomUUID();const b=(await db.query(`INSERT INTO booking(id,quote_id,status,confirmed_at,terms_version,terms_accepted_at,accepted_contact,request_key,public_token_hash,token_expires_at,balance_due_at,total_cop,deposit_cop,paid_cop,payment_status,deposit_percentage)
@@ -128,10 +138,10 @@ export async function mutate(raw:unknown,staff:Staff){
    for(const u of units)await db.query("INSERT INTO unit_allocation(inventory_unit_id,booking_id,kind,period) VALUES($1,$2,'use',tstzrange($3,$4,'[)'))",[u.id,id,p.from,p.to]);
    await assignStaff(db,v.technicianIds,id,p.from,p.to,q.technician_count,snap.technicianUnit??0,snap.event.durationHours);
    if(v.received>0)await db.query("INSERT INTO payment(booking_id,purpose,reference,status,application_status,expected_cop,received_cop,environment,approved_at,method,recorded_by) VALUES($1,'deposit',$2,'approved','applied',$3,$3,'test',now(),'manual',$4)",[id,v.reference,v.received,staff.id]);
-   await db.query("UPDATE quote SET status='accepted' WHERE id=$1",[q.id]);await db.query("UPDATE lead SET stage='won' WHERE id=$1",[q.lead_id]);await audit(db,staff,'booking',id,'confirmed',{quote:q.id,reference:v.reference,received:v.received,reviewed:true,depositAccepted:true});return {id,number:b.number};
+   await db.query("UPDATE quote SET status='accepted' WHERE id=$1",[q.id]);await syncLeadStage(db,q.lead_id,'confirmed',v.reference);await audit(db,staff,'booking',id,'confirmed',{quote:q.id,reference:v.reference,received:v.received,reviewed:true,depositAccepted:true});return {id,number:b.number,leadId:q.lead_id};
   }
   if(v.action==='bookingStatus'||v.action==='assign'||v.action==='payment'){
-   const b=(await db.query('SELECT b.*,q.snapshot,q.technician_count FROM booking b JOIN quote q ON q.id=b.quote_id WHERE b.id=$1 FOR UPDATE OF b',[v.id])).rows[0];if(!b)fail('Reserva no encontrada',404);
+   const b=(await db.query('SELECT b.*,q.snapshot,q.technician_count,q.lead_id FROM booking b JOIN quote q ON q.id=b.quote_id WHERE b.id=$1 FOR UPDATE OF b',[v.id])).rows[0];if(!b)fail('Reserva no encontrada',404);
    if(v.action==='bookingStatus'){
     if(b.status==='cancelled'||b.status==='completed')fail('La reserva ya está cerrada',409);
     if(v.status==='in_service'&&b.status!=='confirmed')fail('Transición no válida');if(v.status==='completed'&&b.status!=='in_service')fail('Primero registra el inicio del evento');
@@ -140,7 +150,8 @@ export async function mutate(raw:unknown,staff:Staff){
     if(v.status==='cancelled'&&!v.reason)fail('Indica el motivo de cancelación');
     await db.query("UPDATE booking SET status=$2,cancellation_reason=$3,refund_status=CASE WHEN $2='cancelled' AND paid_cop>0 THEN 'pending' ELSE refund_status END WHERE id=$1",[b.id,v.status,v.reason||null]);
     if(v.status==='cancelled'||v.status==='completed'){await db.query('UPDATE unit_allocation SET active=false WHERE booking_id=$1',[b.id]);await db.query('UPDATE technician_allocation SET active=false WHERE booking_id=$1',[b.id]);}
-    await audit(db,staff,'booking',b.id,v.status,{reason:v.reason});return {id:b.id};
+    if(v.status==='completed'||v.status==='cancelled')await syncLeadStage(db,b.lead_id,v.status==='completed'?'completed':'lost');
+    await audit(db,staff,'booking',b.id,v.status,{reason:v.reason});return {id:b.id,leadId:b.lead_id};
    }
    if(v.action==='assign'){
     if(b.status!=='confirmed')fail('Solo se reasignan técnicos de reservas confirmadas');
@@ -169,7 +180,7 @@ export async function operationsData(){
  const db=pool();const config=await getConfig(db);
  const [products,assets,technicians,quotes,bookings,incidents,notifications,zones]=await Promise.all([
  db.query('SELECT e.id,e.code,e.name,p.version image_version FROM equipment e LEFT JOIN equipment_photo p ON p.equipment_id=e.id ORDER BY e.code'),
- db.query(`SELECT u.*,e.code equipment,CASE WHEN u.status<>'ready' THEN u.status WHEN EXISTS(SELECT 1 FROM unit_allocation a JOIN booking b ON b.id=a.booking_id WHERE a.inventory_unit_id=u.id AND a.active AND b.status='in_service') THEN 'in_use' WHEN EXISTS(SELECT 1 FROM unit_allocation a WHERE a.inventory_unit_id=u.id AND a.active AND upper(a.period)>now()) THEN 'reserved' ELSE 'ready' END display_status,(SELECT max(upper(a.period)) FROM unit_allocation a WHERE a.inventory_unit_id=u.id AND upper(a.period)<=now()) last_event,(SELECT min(lower(a.period)) FROM unit_allocation a WHERE a.inventory_unit_id=u.id AND a.active AND upper(a.period)>now()) next_event FROM inventory_unit u JOIN equipment e ON e.id=u.equipment_id WHERE NOT u.is_fixture ORDER BY u.asset_tag`),
+ db.query(`SELECT u.*,e.code equipment,e.slug equipment_slug,e.name equipment_name,CASE WHEN u.status<>'ready' THEN u.status WHEN EXISTS(SELECT 1 FROM unit_allocation a JOIN booking b ON b.id=a.booking_id WHERE a.inventory_unit_id=u.id AND a.active AND b.status='in_service') THEN 'in_use' WHEN EXISTS(SELECT 1 FROM unit_allocation a WHERE a.inventory_unit_id=u.id AND a.active AND upper(a.period)>now()) THEN 'reserved' ELSE 'ready' END display_status,(SELECT max(upper(a.period)) FROM unit_allocation a WHERE a.inventory_unit_id=u.id AND upper(a.period)<=now()) last_event,(SELECT min(lower(a.period)) FROM unit_allocation a WHERE a.inventory_unit_id=u.id AND a.active AND upper(a.period)>now()) next_event FROM inventory_unit u JOIN equipment e ON e.id=u.equipment_id WHERE NOT u.is_fixture ORDER BY u.asset_tag`),
  db.query('SELECT * FROM technician WHERE NOT is_fixture ORDER BY name'),
  db.query(`SELECT q.*,COALESCE(q.snapshot->>'equipmentName',e.name) equipment_name FROM quote q JOIN equipment e ON e.id=q.equipment_id ORDER BY q.created_at DESC LIMIT 200`),
  db.query(`SELECT b.*,q.event_start,q.event_end,q.quantity,q.city,q.snapshot,q.technician_count,COALESCE(q.snapshot->>'equipmentName',e.name) equipment_name,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',u.id,'code',u.asset_tag)) FROM unit_allocation a JOIN inventory_unit u ON u.id=a.inventory_unit_id WHERE a.booking_id=b.id),'[]') assets,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',t.id,'name',t.name)) FROM technician_allocation a JOIN technician t ON t.id=a.technician_id WHERE a.booking_id=b.id AND a.active),'[]') technicians FROM booking b JOIN quote q ON q.id=b.quote_id JOIN equipment e ON e.id=q.equipment_id ORDER BY q.event_start DESC LIMIT 200`),

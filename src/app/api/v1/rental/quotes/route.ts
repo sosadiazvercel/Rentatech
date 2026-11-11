@@ -10,7 +10,8 @@ export async function POST(req:Request){
   const body=await jsonBody(req);
   const result=await createQuote(body,req.headers.get('idempotency-key')||'');
   // A mail failure must never turn a saved quote into a failed submission.
-  try{await sendQuoteEmail(result.id);}catch{console.error('quote_email_pending',{quoteId:result.id});}
-  return Response.json(result,{status:201});
+  let emailSent=false;
+  try{emailSent=(await sendQuoteEmail(result.id))?.customerSent??false;}catch{console.error('quote_email_pending',{quoteId:result.id});}
+  return Response.json({...result,emailSent},{status:201});
  }catch(e){return errorResponse(e);}
 }

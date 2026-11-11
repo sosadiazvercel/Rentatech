@@ -33,7 +33,7 @@ export function SiteHeader({products}:{products:PublicProduct[]}){
    <Link className="brand" href="/" onClick={close}>RENTA TECH<small>by SosaDiaz</small></Link>
    <div className="mobile-actions" aria-label="Acciones rapidas">
     <button className="mobile-icon mobile-search" type="button" aria-label="Buscar" aria-expanded={searchOpen} onClick={openSearch}><span/></button>
-    <Link className="button black" href="/pagos">Pagos</Link>
+    <a className="button black" href="https://checkout.wompi.co/l/VPOS_iLusWZ">Pagos</a>
     <button className="menu-toggle mobile-icon mobile-burger" type="button" aria-label="Abrir menu" aria-expanded={open} onClick={()=>setOpen(!open)}><span/></button>
    </div>
    <nav className="nav" aria-label="Navegacion principal">
@@ -69,7 +69,7 @@ export function SiteHeader({products}:{products:PublicProduct[]}){
     </div>
     <button className="desktop search-trigger" type="button" aria-expanded={searchOpen} onClick={openSearch}><svg width="13" height="13" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor"/><path d="m12 12 5 5" stroke="currentColor"/></svg>Buscar</button>
     <Link className="button black" href="/cotizar">Solicitar cotizacion</Link>
-    <Link className="header-pay-link" href="/pagos">Pagos</Link>
+    <a className="header-pay-link" href="https://checkout.wompi.co/l/VPOS_iLusWZ">Pagos</a>
    </nav>
   </div>
   <div className={`site-search ${searchOpen?'open':''}`} role="search">
@@ -92,16 +92,8 @@ export function SiteHeader({products}:{products:PublicProduct[]}){
     <Link href="/vr" onClick={close}>Realidad virtual <ArrowIcon/></Link>
     {products.map(p=><Link href={p.href} onClick={close} key={p.code}>{p.title} <ArrowIcon/></Link>)}
     <Link href="/cotizar" onClick={close}>Cotizar <ArrowIcon/></Link>
-    <Link href="/pagos" onClick={close}>Pagos <ArrowIcon/></Link>
+    <a href="https://checkout.wompi.co/l/VPOS_iLusWZ" onClick={close}>Pagos <ArrowIcon/></a>
    </nav>
-   <div className="mobile-portal">
-    <Link href="/admin" onClick={close}>Portal cliente <ArrowIcon/></Link>
-    <div>
-     <strong>Prepara tu evento</strong>
-     <p>Cuentanos fecha, ciudad y cantidad de visores. Revisamos disponibilidad antes de confirmar.</p>
-     <Link className="button light compact" href="/cotizar" onClick={close}>Solicitar cotizacion</Link>
-    </div>
-   </div>
   </div>
  </header>;
 }

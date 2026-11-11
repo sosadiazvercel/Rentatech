@@ -4,12 +4,13 @@ import pg from 'pg';
 
 const migrationSignals:Record<string,string>={
  '0001_foundations.sql':"SELECT to_regclass('public.staff_profile') IS NOT NULL AS applied",
- '0002_required_values.sql':"SELECT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='lost_requires_reason' AND conrelid=to_regclass('public.lead')) AS applied",
+ '0002_required_values.sql':"SELECT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='lost_requires_reason' AND conrelid=to_regclass('public.lead')) OR EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='lead' AND column_name='stage_version') AS applied",
  '0003_sprint2.sql':"SELECT to_regclass('public.rental_settings') IS NOT NULL AS applied",
  '0004_mvp_cotizador_vr.sql':"SELECT EXISTS(SELECT 1 FROM public.pricing_version WHERE rules_hash='mvp-cotizador-vr-oct-2026') AS applied",
  '0005_product_photos_email.sql':"SELECT to_regclass('public.equipment_photo') IS NOT NULL AS applied",
  '0006_product_management.sql':"SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='equipment' AND column_name='slug') AS applied",
  '0007_basic_staff_auth.sql':"SELECT to_regclass('public.staff_session') IS NOT NULL AS applied",
+ '0008_lead_workflow.sql':"SELECT to_regclass('public.lead_attachment') IS NOT NULL AS applied",
 };
 async function baselineExistingSchema(db:pg.Client,files:string[]){
  if((await db.query('SELECT 1 FROM public.schema_migrations LIMIT 1')).rowCount)return;

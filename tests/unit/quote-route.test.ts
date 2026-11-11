@@ -9,7 +9,7 @@ vi.mock('@/server/http',async importOriginal=>{
 });
 import {POST} from '@/app/api/v1/rental/quotes/route';
 
-const body={equipment:'QUEST3',quantity:3,days:1,date:'2031-10-16',start:'10:00',durationHours:8,city:'Bogotá',address:'Recinto QA',contentStatus:'ready',name:'Cliente QA',company:'',email:'qa@example.test',phone:'+573001234567',nit:'',notes:'',privacy:true};
+const body={equipment:'QUEST3',quantity:3,days:1,date:'2031-10-16',start:'10:00',durationHours:8,city:'Bogotá',address:'Recinto QA',contentStatus:'ready',name:'Cliente QA',company:'',email:'qa@example.test',phone:'+573001234567',nit:'900123456',notes:'',privacy:true};
 function request(){return new Request('https://rentatech.example/api/v1/rental/quotes',{method:'POST',headers:{origin:'https://rentatech.example','content-type':'application/json','idempotency-key':'12345678-1234-4123-8123-123456789012'},body:JSON.stringify(body)});}
 
 beforeEach(()=>{

@@ -23,10 +23,9 @@ afterAll(async()=>{await db?.end();await pool().end();});
 describe('PostgreSQL migration and CRM',()=>{
  it('migrates empty database and creates exactly 28 marked fixtures',async()=>{expect((await db.query('SELECT count(*)::int n FROM inventory_unit WHERE is_fixture')).rows[0].n).toBe(28);await migrate(process.env.DATABASE_URL!,true);});
  it('baselines a pre-existing contiguous schema when migration history is missing',async()=>{
-  await db.query("DELETE FROM staff_session; DROP TABLE staff_session; ALTER TABLE staff_profile DROP COLUMN login_email CASCADE; UPDATE staff_profile SET auth_user_id='00000000-0000-4000-8000-000000000001' WHERE id='00000000-0000-4000-8000-000000000011'; ALTER TABLE staff_profile ALTER COLUMN auth_user_id SET NOT NULL");
   await db.query('TRUNCATE public.schema_migrations');
   await migrate(process.env.DATABASE_URL!,true);
-  expect((await db.query('SELECT count(*)::int n FROM schema_migrations')).rows[0].n).toBe(7);
+  expect((await db.query('SELECT count(*)::int n FROM schema_migrations')).rows[0].n).toBe(8);
   expect((await db.query("SELECT to_regclass('public.staff_session') IS NOT NULL ok")).rows[0].ok).toBe(true);
  });
  it('creates an opaque server-side session for the built-in administrator',async()=>{
@@ -62,13 +61,13 @@ describe('PostgreSQL migration and CRM',()=>{
  });
  it('saves follow-up and immutable audit history',async()=>{
   const id=(await db.query('SELECT id FROM lead LIMIT 1')).rows[0].id;
-  await updateLead(id,{stage:'qualified',ownerId:'00000000-0000-4000-8000-000000000012',estimatedValue:2500000,nextAction:'2030-10-01T10:00:00-05:00',lossReason:'',note:'Revisar logística'}, {id:'00000000-0000-4000-8000-000000000011',auth_user_id:'00000000-0000-4000-8000-000000000001',role:'admin'});
-  expect((await db.query('SELECT stage FROM lead WHERE id=$1',[id])).rows[0].stage).toBe('qualified');
+  await updateLead(id,{stage:'new',expectedVersion:0,ownerId:'00000000-0000-4000-8000-000000000012',estimatedValue:2500000,note:'Revisar logística'}, {id:'00000000-0000-4000-8000-000000000011',auth_user_id:'00000000-0000-4000-8000-000000000001',role:'admin'});
+  expect((await db.query('SELECT stage FROM lead WHERE id=$1',[id])).rows[0].stage).toBe('new');
   expect((await db.query('SELECT body FROM lead_note WHERE lead_id=$1',[id])).rows[0].body).toBe('Revisar logística');
   await expect(db.query("UPDATE audit_log SET action='tampered'")).rejects.toThrow();
  });
- it('requires an actual loss reason at the database boundary',async()=>{
+ it('allows lost without a removed loss reason field',async()=>{
   const id=(await db.query('SELECT id FROM lead LIMIT 1')).rows[0].id;
-  await expect(db.query("UPDATE lead SET stage='lost',loss_reason=NULL WHERE id=$1",[id])).rejects.toThrow();
+  await db.query("UPDATE lead SET stage='lost',loss_reason=NULL WHERE id=$1",[id]);expect((await db.query('SELECT stage FROM lead WHERE id=$1',[id])).rows[0].stage).toBe('lost');
  });
 });

@@ -108,6 +108,7 @@
 }
 .heroSelector button {
   position: relative;
+  position: relative;
   width: 82px;
   height: 82px;
   padding: 0;
@@ -138,8 +139,15 @@
   opacity: 1;
 }
 .heroSelector .activeThumb {
-  outline: 2px solid #eef8bd;
-  outline-offset: -2px;
+  outline: none;
+}
+.heroSelector .activeThumb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid #eef8bd;
+  z-index: 4;
+  pointer-events: none;
 }
 .heroSelector button small {
   display: block;

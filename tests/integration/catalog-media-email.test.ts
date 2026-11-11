@@ -9,6 +9,8 @@ import {pool} from '@/server/db';
 import {createQuote,estimate,mutate} from '@/server/rental';
 import {adminProducts,saveProduct,deleteProduct} from '@/server/products';
 import {sendQuoteEmail} from '@/server/email';
+import {sendLeadEmails} from '@/server/email';
+import {updateLead} from '@/server/leads';
 import {getPublicProducts} from '@/server/public-products';
 import {GET,POST} from '@/app/api/v1/products/[code]/image/route';
 import type {AdminProduct} from '@/lib/catalog';
@@ -54,7 +56,7 @@ it('normalizes photos, persists them, changes cache URLs and exposes the new pho
 it('denies direct access to photo storage for anonymous and authenticated database roles',async()=>{
  for(const role of ['anon','authenticated']){await db.query(`SET ROLE ${role}`);await expect(db.query('SELECT * FROM equipment_photo')).rejects.toThrow();await db.query('RESET ROLE');}
 });
-async function quote(){return createQuote({equipment:'QUEST3',quantity:3,days:1,date:'2035-10-15',start:'10:00',durationHours:8,city:'Bogota',address:'QA',contentStatus:'ready',name:'Test',company:'QA',email:'qa@example.test',phone:'+573001234567',nit:'',notes:'',privacy:true},randomUUID());}
+async function quote(){return createQuote({equipment:'QUEST3',quantity:3,days:1,date:'2035-10-15',start:'10:00',durationHours:8,city:'Bogota',address:'QA',contentStatus:'ready',name:'Test',company:'QA',email:'qa@example.test',phone:'+573001234567',nit:'900123456',notes:'',privacy:true},randomUUID());}
 function configure(){vi.stubEnv('RESEND_API_KEY','test-only');vi.stubEnv('EMAIL_FROM','RENTATECH <test@example.test>');vi.stubEnv('EMAIL_NOTIFICATION_TO','staff@example.test');}
 it('records missing email configuration without attempting an external send',async()=>{
  vi.stubEnv('RESEND_API_KEY','');const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);
@@ -64,18 +66,18 @@ it('records missing email configuration without attempting an external send',asy
 it('serializes concurrent sends, uses a stable provider key and never resends accepted emails',async()=>{
  configure();const fetcher=vi.fn(async()=>Response.json({id:'provider-test-id'}));vi.stubGlobal('fetch',fetcher);
  const q=await quote();await Promise.all([sendQuoteEmail(q.id),sendQuoteEmail(q.id)]);await sendQuoteEmail(q.id);
- expect(fetcher).toHaveBeenCalledTimes(1);expect(fetcher.mock.calls[0]).toBeDefined();
- const row=(await db.query('SELECT * FROM notification_outbox WHERE quote_id=$1',[q.id])).rows[0];expect(row.status).toBe('sent');expect(row.provider_id).toBe('provider-test-id');
+ expect(fetcher).toHaveBeenCalledTimes(2);expect(fetcher.mock.calls[0]).toBeDefined();
+ const row=(await db.query('SELECT * FROM notification_outbox WHERE quote_id=$1 ORDER BY id',[q.id])).rows[0];expect(row.status).toBe('sent');expect(row.provider_id).toBe('provider-test-id');
  const options=(fetcher.mock.calls as unknown as [string,RequestInit][])[0][1];expect((options.headers as Record<string,string>)['Idempotency-Key']).toBe(`quote/${row.id}`);
- expect(JSON.parse(options.body as string).to).toEqual(['qa@example.test']);
+ const payloads=(fetcher.mock.calls as unknown as [string,RequestInit][]).map(call=>JSON.parse(call[1].body as string));expect(payloads.map(p=>p.to[0]).sort()).toEqual(['qa@example.test','staff@example.test']);expect(payloads[0].subject).not.toBe(payloads[1].subject);
 });
 it('records provider errors and uncertain responses, and blocks retries past the safe provider window',async()=>{
  configure();const fetcher=vi.fn(async()=>Response.json({message:'rejected'},{status:422}));vi.stubGlobal('fetch',fetcher);
  const q=await quote();await sendQuoteEmail(q.id);expect((await db.query('SELECT status FROM notification_outbox WHERE quote_id=$1',[q.id])).rows[0].status).toBe('failed');
- fetcher.mockRejectedValueOnce(new Error('timeout'));await sendQuoteEmail(q.id);
+ fetcher.mockRejectedValue(new Error('timeout'));await sendQuoteEmail(q.id);
  expect((await db.query('SELECT status FROM notification_outbox WHERE quote_id=$1',[q.id])).rows[0].status).toBe('uncertain');
  await db.query("UPDATE notification_outbox SET attempted_at=now()-interval '25 hours' WHERE quote_id=$1",[q.id]);await sendQuoteEmail(q.id);
- expect(fetcher).toHaveBeenCalledTimes(2);expect((await db.query('SELECT status FROM notification_outbox WHERE quote_id=$1',[q.id])).rows[0].status).toBe('review_required');
+ expect(fetcher).toHaveBeenCalledTimes(4);expect((await db.query('SELECT status FROM notification_outbox WHERE quote_id=$1',[q.id])).rows[0].status).toBe('review_required');
 });
 
 const staff={id:'00000000-0000-4000-8000-000000000011',auth_user_id:'00000000-0000-4000-8000-000000000001',role:'admin' as const};
@@ -90,7 +92,7 @@ it('creates arbitrary products with editable content and prices; real units enab
  expect((await estimate(event)).available).toBe(0);
  for(let i=0;i<3;i++)await mutate({action:'asset',equipment:'CATALOGQA',code:'CATALOGQA-'+i,serial:'',status:'ready',condition:'QA',notes:'Inventario de prueba'},staff);
  expect(await estimate(event)).toMatchObject({available:3,hardware:369000});
- const request={...event,name:'QA catálogo',company:'QA',email:'catalog@example.test',phone:'+573001234567',notes:'',nit:'',privacy:true};
+ const request={...event,name:'QA catálogo',company:'QA',email:'catalog@example.test',phone:'+573001234567',notes:'',nit:'900123456',privacy:true};
  const before=await createQuote(request,randomUUID());
  await saveProduct({...payload(product,data.pricingId),name:'Producto actualizado',description:'Descripción nueva',specifications:[['Memoria','1 TB'],['Conectividad','Wi-Fi']],categories:['Nueva categoría'],tiers:[{min:3,max:15,unit:150000}]},staff);
  const publicProduct=(await getPublicProducts()).find(p=>p.code==='CATALOGQA')!;
@@ -116,4 +118,41 @@ it('protects product roles, stale edits, duplicate URLs and complete price clean
  await deleteProduct(created.id,staff);
  const after=await adminProducts();expect(after.products.some(p=>p.id===created.id)).toBe(false);
  expect((await db.query('SELECT rules FROM pricing_version WHERE id=$1',[after.pricingId])).rows[0].rules.tiers.some((t:{product:string})=>t.product==='DELETEQA')).toBe(false);
+});
+
+it('follows all rental stages, stores private PDFs, reserves units and sends each action only once',async()=>{
+ configure();const fetcher=vi.fn(async()=>Response.json({id:randomUUID()}));vi.stubGlobal('fetch',fetcher);
+ const q=await quote(),leadId=(await db.query('SELECT lead_id FROM quote WHERE id=$1',[q.id])).rows[0].lead_id;
+ const pdf=Buffer.from('%PDF-1.4\nQuotation test\n%%EOF').toString('base64');
+ let version=0;
+ const save=async(stage:string,patch:Record<string,unknown>={})=>{const result=await updateLead(leadId,{stage,expectedVersion:version,ownerId:null,estimatedValue:1570000,note:'',...patch},staff);version=result.version;return result;};
+ await expect(save('quoted')).rejects.toMatchObject({code:'ATTACHMENT_REQUIRED'});
+ await expect(save('completed')).rejects.toMatchObject({code:'CONFIRM_FIRST'});
+ await save('quoted',{attachment:{filename:'cotizacion.pdf',content:pdf}});
+ const attached=(await db.query('SELECT * FROM lead_attachment WHERE lead_id=$1',[leadId])).rows[0];expect(attached.data.toString('base64')).toBe(pdf);
+ for(const role of ['anon','authenticated']){await db.query(`SET ROLE ${role}`);await expect(db.query('SELECT * FROM lead_attachment')).rejects.toThrow();await db.query('RESET ROLE');}
+ await Promise.all([sendLeadEmails(leadId),sendLeadEmails(leadId)]);expect(fetcher).toHaveBeenCalledTimes(1);
+ let mail=JSON.parse((fetcher.mock.calls as unknown as [string,RequestInit][])[0][1].body as string);expect(mail.attachments[0].content).toBe(pdf);expect(mail.text).toContain('confirmar si la aceptas');
+ expect((await save('quoted',{note:'Solo una nota',attachment:{filename:'cotizacion.pdf',content:pdf}})).notificationQueued).toBe(false);
+ await sendLeadEmails(leadId);expect(fetcher).toHaveBeenCalledTimes(1);
+ await expect(updateLead(leadId,{stage:'lost',expectedVersion:0,ownerId:null,estimatedValue:null,note:''},staff)).rejects.toMatchObject({code:'STALE_UPDATE'});
+ await expect(save('awaiting_payment')).rejects.toMatchObject({code:'PAYMENT_LINK_REQUIRED'});
+ await save('awaiting_payment',{paymentUrl:'https://example.test/pagar'});await sendLeadEmails(leadId);
+ mail=JSON.parse((fetcher.mock.calls as unknown as [string,RequestInit][])[1][1].body as string);expect(mail.text).toContain('https://example.test/pagar');expect(mail.attachments).toHaveLength(1);
+ await expect(save('confirmed')).rejects.toMatchObject({code:'PAYMENT_REQUIRED'});
+ await save('confirmed',{paymentConfirmed:true,paymentReference:'COMPROBANTE-QA'});await sendLeadEmails(leadId);
+ expect((await db.query('SELECT count(*)::int n FROM unit_allocation WHERE lead_id=$1 AND active',[leadId])).rows[0].n).toBe(3);
+ await save('confirmed',{note:'Pago revisado',paymentReference:'COMPROBANTE-QA'});await sendLeadEmails(leadId);expect(fetcher).toHaveBeenCalledTimes(3);
+ await save('completed');await sendLeadEmails(leadId);expect(fetcher).toHaveBeenCalledTimes(4);
+ expect((await db.query('SELECT count(*)::int n FROM unit_allocation WHERE lead_id=$1 AND active',[leadId])).rows[0].n).toBe(0);
+ expect((await db.query('SELECT count(*)::int n FROM notification_outbox WHERE lead_id=$1',[leadId])).rows[0].n).toBe(4);
+});
+
+it('marks a request lost without sending email, and rejects invalid PDF uploads atomically',async()=>{
+ const q=await quote(),leadId=(await db.query('SELECT lead_id FROM quote WHERE id=$1',[q.id])).rows[0].lead_id;
+ const base={expectedVersion:0,ownerId:null,estimatedValue:null,note:''};
+ await expect(updateLead(leadId,{...base,stage:'quoted',attachment:{filename:'bad.pdf',content:Buffer.from('not a PDF').toString('base64')}},staff)).rejects.toMatchObject({code:'INVALID_ATTACHMENT'});
+ await updateLead(leadId,{...base,stage:'lost'},staff);
+ expect((await db.query('SELECT stage FROM lead WHERE id=$1',[leadId])).rows[0].stage).toBe('lost');
+ expect((await db.query('SELECT 1 FROM notification_outbox WHERE lead_id=$1',[leadId])).rowCount).toBe(0);
 });
