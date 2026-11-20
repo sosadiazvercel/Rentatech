@@ -6,7 +6,7 @@ import {migrate} from '../../scripts/migrate';
 import {seed} from '../../scripts/seed';
 import {createLead,updateLead} from '@/server/leads';
 import {createBasicSession} from '@/server/auth';
-import {calendarId,saveCalendarId} from '@/server/calendar';
+import {createCalendarEvent,listCalendarEvents} from '@/server/manual-calendar';
 import {pool} from '@/server/db';
 import {validLead} from '../fixture';
 let db:pg.Client;
@@ -26,7 +26,7 @@ describe('PostgreSQL migration and CRM',()=>{
  it('baselines a pre-existing contiguous schema when migration history is missing',async()=>{
   await db.query('TRUNCATE public.schema_migrations');
   await migrate(process.env.DATABASE_URL!,true);
-  expect((await db.query('SELECT count(*)::int n FROM schema_migrations')).rows[0].n).toBe(9);
+  expect((await db.query('SELECT count(*)::int n FROM schema_migrations')).rows[0].n).toBe(10);
   expect((await db.query("SELECT to_regclass('public.staff_session') IS NOT NULL ok")).rows[0].ok).toBe(true);
  });
  it('creates an opaque server-side session for the built-in administrator',async()=>{
@@ -34,13 +34,12 @@ describe('PostgreSQL migration and CRM',()=>{
   expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
   expect((await db.query('SELECT count(*)::int n FROM staff_session')).rows[0].n).toBe(1);
  });
- it('stores the calendar ID privately and only allows an administrator to change it',async()=>{
+ it('stores manual calendar events privately for the internal team',async()=>{
   const admin={id:'00000000-0000-4000-8000-000000000011',auth_user_id:'00000000-0000-4000-8000-000000000001',role:'admin' as const};
-  const id='reservas@group.calendar.google.com';
-  await saveCalendarId(id,admin);expect(await calendarId()).toBe(id);
-  await expect(saveCalendarId(id,{...admin,role:'operator'})).rejects.toMatchObject({status:403});
-  await expect(saveCalendarId('valor-invalido',admin)).rejects.toMatchObject({status:422});
-  for(const role of ['anon','authenticated']){await db.query(`SET ROLE ${role}`);await expect(db.query('SELECT google_calendar_id FROM rental_settings')).rejects.toThrow();await db.query('RESET ROLE');}
+  const event=await createCalendarEvent({title:'Alquiler QA',date:'2031-10-16',start:'09:00',endDate:'2031-10-16',end:'17:00',location:'Centro QA',notes:'Prueba'},admin);
+  expect((await listCalendarEvents('2031-10-01T00:00:00.000Z','2031-11-01T00:00:00.000Z')).map(item=>item.id)).toContain(event.id);
+  await expect(createCalendarEvent({title:'Alquiler inválido',date:'2031-10-16',start:'17:00',endDate:'2031-10-16',end:'09:00',location:'',notes:''},admin)).rejects.toMatchObject({status:422});
+  for(const role of ['anon','authenticated']){await db.query(`SET ROLE ${role}`);await expect(db.query('SELECT * FROM calendar_event')).rejects.toThrow();await db.query('RESET ROLE');}
  });
  it('denies direct public and authenticated access to PII and pricing',async()=>{for(const role of ['anon','authenticated']){await db.query(`SET ROLE ${role}`);await expect(db.query('SELECT * FROM customer')).rejects.toThrow();await expect(db.query('SELECT * FROM pricing_version')).rejects.toThrow();await db.query('RESET ROLE');}});
  it('rejects blank serials and bad foreign keys',async()=>{
