@@ -132,14 +132,14 @@ it('follows all rental stages, stores private PDFs, reserves units and sends eac
  const attached=(await db.query('SELECT * FROM lead_attachment WHERE lead_id=$1',[leadId])).rows[0];expect(attached.data.toString('base64')).toBe(pdf);
  for(const role of ['anon','authenticated']){await db.query(`SET ROLE ${role}`);await expect(db.query('SELECT * FROM lead_attachment')).rejects.toThrow();await db.query('RESET ROLE');}
  await Promise.all([sendLeadEmails(leadId),sendLeadEmails(leadId)]);expect(fetcher).toHaveBeenCalledTimes(1);
- let mail=JSON.parse((fetcher.mock.calls as unknown as [string,RequestInit][])[0][1].body as string);expect(mail.attachments[0].content).toBe(pdf);expect(mail.text).toContain('confirmar si la aceptas');
+ let mail=JSON.parse((fetcher.mock.calls as unknown as [string,RequestInit][])[0][1].body as string);expect(mail.attachments[0].content).toBe(pdf);expect(mail.text).toContain('confirmar si la aceptas');expect(mail.html).toContain('Tu propuesta está lista.');
  expect((await save('quoted',{note:'Solo una nota',attachment:{filename:'cotizacion.pdf',content:pdf}})).notificationQueued).toBe(false);
  await sendLeadEmails(leadId);expect(fetcher).toHaveBeenCalledTimes(1);
  await expect(updateLead(leadId,{stage:'lost',expectedVersion:0,ownerId:null,estimatedValue:null,note:''},staff)).rejects.toMatchObject({code:'STALE_UPDATE'});
  await expect(save('awaiting_payment')).rejects.toMatchObject({code:'PAYMENT_LINK_REQUIRED'});
  await save('awaiting_payment',{paymentUrl:'https://example.test/pagar'});await sendLeadEmails(leadId);
  await expect(save('awaiting_payment',{estimatedValue:1,paymentUrl:'https://example.test/pagar'})).rejects.toMatchObject({code:'VALUE_LOCKED'});
- mail=JSON.parse((fetcher.mock.calls as unknown as [string,RequestInit][])[1][1].body as string);expect(mail.text).toContain('https://example.test/pagar');expect(mail.attachments).toHaveLength(1);
+ mail=JSON.parse((fetcher.mock.calls as unknown as [string,RequestInit][])[1][1].body as string);expect(mail.text).toContain('https://example.test/pagar');expect(mail.html).toContain('Ir al pago seguro');expect(mail.attachments).toHaveLength(1);
  await expect(save('confirmed')).rejects.toMatchObject({code:'PAYMENT_REQUIRED'});
  await expect(save('confirmed',{paymentConfirmed:true,paymentReference:'COMPROBANTE-QA'})).rejects.toMatchObject({code:'TECHNICIAN_REQUIRED'});
  const technician=await mutate({action:'technician',name:'Técnico seguimiento QA',phone:'',email:'',active:true,cost4:null,cost8:null,notes:''},staff);
