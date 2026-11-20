@@ -41,7 +41,7 @@ export async function catalog(){
 }
 async function audit(db:DB,staff:Staff|null,entity:string,id:string,action:string,after:unknown={}){await db.query('INSERT INTO audit_log(actor_type,actor_id,entity_type,entity_id,action,after) VALUES($1,$2,$3,$4,$5,$6)',[staff?'staff':'public',staff?.id??null,entity,id,action,JSON.stringify(after)]);}
 function onlyEvent(v:RentalRequest):RentalEvent {return {equipment:v.equipment,quantity:v.quantity,days:v.days,date:v.date,start:v.start,durationHours:v.durationHours,city:v.city,address:v.address,contentStatus:v.contentStatus};}
-async function saveQuote(db:DB,v:RentalRequest,leadId:string,version:number,overrides:Overrides={},status='pending_confirmation'){
+export async function saveQuote(db:DB,v:RentalRequest,leadId:string,version:number,overrides:Overrides={},status='pending_confirmation'){
  const ev=onlyEvent(v),e=await estimate(ev,db,overrides),c=await getConfig(db),p=period(ev,c.rules);
  if(v.quantity>e.available)fail(`Solo hay ${e.available} equipos disponibles en ese horario`,409);
  const id=randomUUID();
@@ -85,7 +85,7 @@ const command=z.discriminatedUnion('action',[
  z.object({action:z.literal('resolveIncident'),id:z.uuid(),finalCost:cop.nullable()}),
  z.object({action:z.literal('readNotifications')})
 ]);
-async function assignStaff(db:DB,ids:string[],bookingId:string,from:Date,to:Date,required:number,unit:number,hours:number){
+export async function assignStaff(db:DB,ids:string[],bookingId:string,from:Date,to:Date,required:number,unit:number,hours:number){
  if(new Set(ids).size!==ids.length||ids.length!==required)fail(`Selecciona exactamente ${required} técnico(s)`);
  const techs=(await db.query('SELECT * FROM technician WHERE id=ANY($1::uuid[]) AND active AND NOT is_fixture ORDER BY id FOR UPDATE',[ids])).rows;
  if(techs.length!==required)fail('Técnico inactivo o no válido');

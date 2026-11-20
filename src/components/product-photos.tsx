@@ -6,7 +6,7 @@ import {useState} from 'react';
 export function ProductPhotos({products}:{products:{code:string;name:string;image_version?:string|null}[]}){
  const router=useRouter();const [versions,setVersions]=useState<Record<string,string>>({});
  const [busy,setBusy]=useState(''),[message,setMessage]=useState(''),[error,setError]=useState('');
- const fallback=(code:string)=>['QUEST2','QUEST3'].includes(code)?`/images/meta-quest-${code==='QUEST2'?'2':'3'}-cutout.png`:'/images/product-placeholder.svg';
+ const fallback=(code:string)=>['QUEST2','QUEST3'].includes(code)?`/images/meta-quest-${code==='QUEST2'?'2':'3'}-headset.png`:'/images/product-placeholder.svg';
  async function remove(code:string){setBusy(code);setError('');setMessage('');try{const response=await fetch(`/api/v1/products/${encodeURIComponent(code)}/image`,{method:'DELETE'});const data=await response.json();if(!response.ok)throw Error(data.error?.message);setVersions(v=>({...v,[code]:fallback(code)}));setMessage('Foto personalizada retirada.');router.refresh();}catch(e){setError(e instanceof Error?e.message:'No se pudo retirar la foto.');}finally{setBusy('');}}
  async function upload(code:string,file:File){
   setError('');setMessage('');

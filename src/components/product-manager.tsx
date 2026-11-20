@@ -11,10 +11,10 @@ import s from './product-manager.module.css';
 type Data={pricingId:string;products:AdminProduct[]};
 const emptyProduct:AdminProduct={id:'',code:'',name:'',slug:'',brand:'',description:'',summary:'',categories:['Realidad virtual'],specifications:[],published:false,active:true,featured:false,sortOrder:0,updatedAt:'',image_version:null,inventory:0,tiers:[{min:3,max:15,unit:null}]};
 
-export function ProductManager({isAdmin}:{isAdmin:boolean}){
+export function ProductManager({isAdmin,initialCode}:{isAdmin:boolean;initialCode?:string}){
  const router=useRouter();const [data,setData]=useState<Data|null>(null),[selected,setSelected]=useState(''),[query,setQuery]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
  async function load(){const response=await fetch('/api/v1/admin/products',{cache:'no-store'});const body=await response.json();if(!response.ok)throw Error(body.error?.message??'No pudimos cargar los productos.');setData(body);return body as Data;}
- useEffect(()=>{let active=true;fetch('/api/v1/admin/products',{cache:'no-store'}).then(async response=>{const body=await response.json();if(!response.ok)throw Error(body.error?.message??'No pudimos cargar los productos.');if(active){setData(body);setSelected(body.products[0]?.id??'new');}}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[]);
+ useEffect(()=>{let active=true;fetch('/api/v1/admin/products',{cache:'no-store'}).then(async response=>{const body=await response.json();if(!response.ok)throw Error(body.error?.message??'No pudimos cargar los productos.');if(active){setData(body);setSelected(body.products.find((p:AdminProduct)=>p.code===initialCode)?.id??body.products[0]?.id??'new');}}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[initialCode]);
  async function save(product:AdminProduct){
   setBusy(true);setError('');setMessage('');
   try{
@@ -56,7 +56,7 @@ function ProductEditor({product,isAdmin,busy,onSave,onDelete}:{product:AdminProd
     <div className={s.editorHeading}><h2>{product.id?'Editar producto':'Nuevo producto'}</h2>{product.id&&product.published&&product.active&&<Link href={`/vr/${product.slug}`} target="_blank" className="button secondary compact">Ver ficha publicada</Link>}</div>
     <div className="fields">{field('name','Nombre del producto',true)}{field('code','Código interno',true)}{field('brand','Marca')}{field('slug','URL del producto',true)}</div>
     <p className="muted">El código identifica el inventario. La URL de la ficha es /vr/{draft.slug||'nombre-del-producto'}.</p>
-    <label className="field">Descripción del producto<textarea name="description" value={draft.description} maxLength={6000} rows={5} onChange={e=>update('description',e.target.value)}/></label>
+    <label className="field">Descripción del producto<textarea aria-label="Descripción del producto" name="description" value={draft.description} maxLength={6000} rows={5} onChange={e=>update('description',e.target.value)}/></label>
     {field('summary','Texto corto para el menú y el buscador')}
     <div className="fields"><label className="field">Categorías<input aria-label="Categorías" value={categories} maxLength={1000} onChange={e=>setCategories(e.target.value)} placeholder="Realidad virtual, Realidad mixta"/><small>Separa las categorías con comas. Aparecen en los filtros y el menú.</small></label><label className="field">Orden en la tienda<input type="number" min={0} max={100000} value={draft.sortOrder} onChange={e=>update('sortOrder',Number(e.target.value))}/></label></div>
     <div className={s.visibility}><label className="check"><input type="checkbox" checked={draft.active} onChange={e=>update('active',e.target.checked)}/>Producto activo</label><label className="check"><input type="checkbox" checked={draft.published} onChange={e=>update('published',e.target.checked)}/>Publicado en la tienda</label><label className="check"><input type="checkbox" checked={draft.featured} onChange={e=>update('featured',e.target.checked)}/>Destacado en el inicio</label><small>Desactiva el producto para archivarlo. Un borrador puede conservar su inventario sin mostrarse en la tienda.</small></div>

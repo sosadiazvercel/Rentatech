@@ -39,6 +39,7 @@ export const processStages=['new','quoted','awaiting_payment','confirmed','compl
 export const leadUpdateSchema=z.object({
  stage:z.enum(['new','quoted','lost','awaiting_payment','confirmed','completed']), expectedVersion:z.number().int().nonnegative(), ownerId:z.uuid().nullable(),
  estimatedValue:z.number().int().nonnegative().max(1000000000).nullable(),
+ technicianIds:z.array(z.uuid()).max(100).optional(),
  paymentUrl:z.union([z.literal(''),z.url().max(2000).refine(v=>new URL(v).protocol==='https:','Usa un enlace HTTPS')]).default(''),
  paymentReference:z.string().trim().max(180).default(''), paymentConfirmed:z.boolean().default(false),
  note:z.string().trim().max(4000), attachment:z.object({filename:z.string().min(1).max(180),content:z.string().max(6990508)}).strict().optional()

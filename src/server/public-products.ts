@@ -12,13 +12,13 @@ type ProductMeta={
 
 const known:Record<string,ProductMeta>={
  QUEST2:{
-  image:'/images/meta-quest-2-cutout.png',
+  image:'/images/meta-quest-2-headset.png',
   text:'Realidad virtual inalambrica y versatil para tus eventos.',
   meta:'128 GB / 2 controles touch / seguimiento 6DOF',
   specs:[['Tipo','Standalone VR'],['Almacenamiento','128 GB'],['Resolucion','1832 x 1920 por ojo'],['Mandos','Touch incluidos'],['Seguimiento','Inside-out'],['Passthrough','Blanco y negro']],
  },
  QUEST3:{
-  image:'/images/meta-quest-3-cutout.png',
+  image:'/images/meta-quest-3-headset.png',
   text:'Nuestro equipo principal para experiencias inmersivas y contenido con mayor nitidez.',
   meta:'512 GB / 2 controles Touch Plus / seguimiento 6DOF',
   specs:[['Tipo','Standalone VR'],['Almacenamiento','512 GB'],['Resolucion','2064 x 2208 por ojo'],['Mandos','Touch Plus incluidos'],['Seguimiento','Inside-out'],['Passthrough','A color']],

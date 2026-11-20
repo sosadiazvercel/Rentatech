@@ -9,10 +9,12 @@ test('hero frames stay complete when switching products and mobile hides header 
   await selectors.nth(i).click();await expect(selectors.nth(i)).toHaveAttribute('aria-pressed','true');
   expect(await selectors.nth(i).evaluate(el=>{const css=getComputedStyle(el,'::after');return css.borderTopWidth==='2px'&&css.borderRightWidth==='2px'&&css.borderBottomWidth==='2px'&&css.borderLeftWidth==='2px'&&css.zIndex==='4';})).toBe(true);
  }
+ await page.locator('main img').evaluateAll(images=>Promise.all(images.map(img=>(img as HTMLImageElement).decode().catch(()=>{}))));
  await page.screenshot({path:'test-results/home-adjusted-desktop.png',fullPage:true});
  await page.setViewportSize({width:360,height:850});
  await page.getByRole('button',{name:'Abrir menu'}).click();
- for(const link of await page.locator('header a[href="/cotizar"],header a[href="/admin"]').all())await expect(link).toBeHidden();
+ for(const link of await page.locator('header .nav a[href="/cotizar"],header a[href="/admin"]').all())await expect(link).toBeHidden();
+ await expect(page.locator('header a[href="/cotizar"]:visible')).toHaveCount(1);
  await page.getByRole('button',{name:'Abrir menu'}).click();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:'test-results/home-adjusted-mobile.png',fullPage:true});
@@ -28,6 +30,9 @@ test('quote validates identification, includes rental days and displays only the
  await page.getByLabel('Dirección o lugar del alquiler').fill('Lugar QA');await page.getByRole('button',{name:'Continuar',exact:true}).click();
  await expect(page.getByLabel('Código internacional')).toHaveValue('+57');
  await page.getByLabel('Nombre de contacto').fill('Cliente QA');await page.getByLabel('Correo electronico').fill('qa@example.test');await page.getByLabel('Teléfono / WhatsApp').fill('3001234567');
+ await page.getByLabel('Código internacional').selectOption('+51');await expect(page.getByLabel('Teléfono / WhatsApp')).toHaveValue('3001234567');
+ await page.getByLabel('Código internacional').selectOption('+57');await expect(page.locator('.phone-country')).toContainText('+57');await expect(page.locator('.phone-country img')).toHaveAttribute('src','/images/flags/co.svg');
+ await page.screenshot({path:'test-results/quote-phone-control.png',fullPage:true});
  await page.getByRole('button',{name:'Continuar',exact:true}).click();await expect(page.getByRole('alert',{name:'Error del cotizador'})).toContainText('NIT');
  await page.getByLabel('NIT / Cédula').fill('900123456');await page.getByRole('button',{name:'Continuar',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Resumen de cotizacion'})).toBeVisible();
@@ -61,7 +66,10 @@ test('request detail handles current rental fields and adapts follow-up to each 
   await page.setViewportSize({width:360,height:850});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:'test-results/lead-followup-mobile.png',fullPage:true});
   await page.goto('/admin/operaciones');await page.getByRole('button',{name:'Inventario',exact:true}).click();
-  await expect(page.locator('tbody a[href^="/vr/"]').first()).toBeVisible();
+  const model=page.locator('tbody a[href^="/admin/productos?modelo="]').first();await expect(model).toBeVisible();const name=await model.textContent();await model.click();await expect(page.getByRole('heading',{name:'Editar producto',exact:true})).toBeVisible();await expect(page.getByLabel('Nombre del producto',{exact:true})).toHaveValue(name!);
+  await page.goto('/admin/calendario');await expect(page.getByRole('heading',{name:'Calendario de reservas',exact:true})).toBeVisible();
+  await db.query("UPDATE lead SET stage='completed' WHERE id=$1",[leadId]);await page.goto(`/admin/leads/${leadId}`);
+  await expect(page.getByLabel('Etapa',{exact:true})).toBeDisabled();await expect(page.locator('input[name="estimatedValue"]')).toBeDisabled();await expect(page.locator('textarea[name="note"]')).toBeDisabled();await expect(page.getByRole('button',{name:'Finalizar alquiler',exact:true})).toHaveCount(0);
  }finally{
   await db.query('DELETE FROM lead WHERE id=$1',[leadId]);await db.query('DELETE FROM customer WHERE id=$1',[customerId]);await db.query('DELETE FROM staff_session WHERE token_hash=$1',[createHash('sha256').update(token).digest('hex')]);await db.end();
  }

@@ -4,8 +4,8 @@ import {leadSchema,reviewReasons,leadUpdateSchema} from '@/lib/lead-schema';
 import {pool,transaction} from './db';
 import {HttpError} from './http';
 import type {Staff} from './auth';
-import {getConfig,period} from './rental';
-import {eventSchema} from '@/lib/rental';
+import {getConfig,period,saveQuote,assignStaff} from './rental';
+import {eventSchema,type RentalRequest} from '@/lib/rental';
 import {stageMail} from '@/lib/lead-email';
 const hash=(s:string)=>createHash('sha256').update(s).digest('hex');
 export async function createLead(raw:unknown,key:string){
@@ -47,6 +47,8 @@ export async function updateLead(id:string,raw:unknown,staff:Staff){
   const old=(await db.query('SELECT * FROM public.lead WHERE id=$1 FOR UPDATE',[id])).rows[0];
   if(!old)throw new HttpError(404,'NOT_FOUND','No encontramos la solicitud');
   if(v.expectedVersion!==old.stage_version)throw new HttpError(409,'STALE_UPDATE','La solicitud cambió. Recarga antes de guardar.');
+  if(old.stage==='completed')throw new HttpError(409,'RENTAL_CLOSED','El alquiler ya finalizó y no admite cambios');
+  if((['awaiting_payment','confirmed'].includes(old.stage)||['awaiting_payment','confirmed'].includes(v.stage))&&String(v.estimatedValue??'')!==String(old.estimated_value_cop??''))throw new HttpError(409,'VALUE_LOCKED','El valor estimado está bloqueado desde Por pagar');
   if(v.ownerId&&!(await db.query('SELECT id FROM public.staff_profile WHERE id=$1 AND active=true',[v.ownerId])).rowCount)throw new HttpError(422,'INVALID_OWNER','Responsable no disponible');
   let attachmentId=old.attachment_id;
   if(v.attachment){
@@ -66,7 +68,7 @@ export async function updateLead(id:string,raw:unknown,staff:Staff){
   if(v.stage==='confirmed'&&transition&&(!v.paymentConfirmed||!v.paymentReference))throw new HttpError(422,'PAYMENT_REQUIRED','Confirma el pago e indica su referencia');
   if(v.stage==='completed'&&transition&&old.stage!=='confirmed')throw new HttpError(422,'CONFIRM_FIRST','Confirma el alquiler antes de finalizarlo');
   if(transition&&old.stage==='completed')throw new HttpError(409,'RENTAL_CLOSED','El alquiler ya finalizó');
-  if(transition&&v.stage==='confirmed'){
+  if(v.stage==='confirmed'){
    const existing=(await db.query("SELECT b.id FROM booking b JOIN quote q ON q.id=b.quote_id WHERE q.lead_id=$1 AND b.status IN ('confirmed','in_service')",[id])).rows[0];
    if(!existing){
     // The event schema is strict, so pick only rental fields from the saved request.
@@ -77,9 +79,27 @@ export async function updateLead(id:string,raw:unknown,staff:Staff){
     const equipment=(await db.query('SELECT id FROM equipment WHERE code=$1',[r.equipment])).rows[0];
     if(!equipment)throw new HttpError(422,'INVALID_EQUIPMENT','Equipo no disponible');
     await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',['inventory:'+equipment.id]);
+    // Replace reservations from the earlier lead-only workflow in this same transaction.
+    await db.query('UPDATE unit_allocation SET active=false WHERE lead_id=$1 AND booking_id IS NULL',[id]);
+    let quote=(await db.query('SELECT * FROM quote WHERE lead_id=$1 ORDER BY version DESC LIMIT 1',[id])).rows[0];
+    if(!quote){
+     const request={...checked.data,name:r.name||'Cliente',company:r.company||'',email:r.email,phone:r.phone,notes:r.notes||'',nit:r.nit||'',privacy:true} as RentalRequest;
+     const created=await saveQuote(db,request,id,1);
+     quote=(await db.query('SELECT * FROM quote WHERE id=$1',[created.id])).rows[0];
+    }
+    if(!v.technicianIds?.length)throw new HttpError(422,'TECHNICIAN_REQUIRED','Asigna los técnicos antes de confirmar el alquiler');
     const units=(await db.query("SELECT u.id FROM inventory_unit u WHERE u.equipment_id=$1 AND u.status='ready' AND NOT u.is_fixture AND NOT EXISTS(SELECT 1 FROM unit_allocation a WHERE a.inventory_unit_id=u.id AND a.active AND a.period && tstzrange($2,$3,'[)')) ORDER BY u.asset_tag LIMIT $4 FOR UPDATE OF u",[equipment.id,p.from,p.to,r.quantity])).rows;
     if(units.length!==r.quantity)throw new HttpError(409,'NO_AVAILABILITY','No hay suficientes equipos disponibles para confirmar el alquiler');
-    for(const unit of units)await db.query("INSERT INTO unit_allocation(inventory_unit_id,lead_id,kind,period,reason) VALUES($1,$2,'manual',tstzrange($3,$4,'[)'),$5)",[unit.id,id,p.from,p.to,'Alquiler confirmado '+id]);
+    const bookingId=randomUUID(),total=Number(old.estimated_value_cop??quote.total_cop);
+    await db.query(`INSERT INTO booking(id,quote_id,status,confirmed_at,terms_version,terms_accepted_at,accepted_contact,request_key,public_token_hash,token_expires_at,balance_due_at,total_cop,deposit_cop)
+     VALUES($1,$2,'confirmed',now(),$3,now(),$4,$5,$6,$7,$8,$9,$10)`,[bookingId,quote.id,quote.policy_version,r.name||'Cliente','lead-confirm:'+id,hash(randomUUID()),p.end,p.from,total,Math.min(Number(quote.deposit_cop),total)]);
+    for(const unit of units)await db.query("INSERT INTO unit_allocation(inventory_unit_id,lead_id,booking_id,kind,period) VALUES($1,$2,$3,'use',tstzrange($4,$5,'[)'))",[unit.id,id,bookingId,p.from,p.to]);
+    await assignStaff(db,v.technicianIds,bookingId,p.from,p.to,quote.technician_count,quote.snapshot.technicianUnit??0,checked.data.durationHours);
+    await db.query("UPDATE quote SET status='accepted' WHERE id=$1",[quote.id]);
+   }else if(v.technicianIds){
+    const q=(await db.query('SELECT q.* FROM quote q JOIN booking b ON b.quote_id=q.id WHERE b.id=$1',[existing.id])).rows[0];
+    const p=period(q.snapshot.event,q.snapshot.rules);
+    await assignStaff(db,v.technicianIds,existing.id,p.from,p.to,q.technician_count,q.snapshot.technicianUnit??0,q.snapshot.event.durationHours);
    }
   }
   if(transition&&old.stage==='confirmed'&&v.stage!=='confirmed'){

@@ -6,7 +6,7 @@ import {randomUUID} from 'node:crypto';
 import {migrate} from '../../scripts/migrate';
 import {seed} from '../../scripts/seed';
 import {pool} from '@/server/db';
-import {createQuote,estimate,mutate} from '@/server/rental';
+import {createQuote,estimate,mutate,operationsData} from '@/server/rental';
 import {adminProducts,saveProduct,deleteProduct} from '@/server/products';
 import {sendQuoteEmail} from '@/server/email';
 import {sendLeadEmails} from '@/server/email';
@@ -138,12 +138,20 @@ it('follows all rental stages, stores private PDFs, reserves units and sends eac
  await expect(updateLead(leadId,{stage:'lost',expectedVersion:0,ownerId:null,estimatedValue:null,note:''},staff)).rejects.toMatchObject({code:'STALE_UPDATE'});
  await expect(save('awaiting_payment')).rejects.toMatchObject({code:'PAYMENT_LINK_REQUIRED'});
  await save('awaiting_payment',{paymentUrl:'https://example.test/pagar'});await sendLeadEmails(leadId);
+ await expect(save('awaiting_payment',{estimatedValue:1,paymentUrl:'https://example.test/pagar'})).rejects.toMatchObject({code:'VALUE_LOCKED'});
  mail=JSON.parse((fetcher.mock.calls as unknown as [string,RequestInit][])[1][1].body as string);expect(mail.text).toContain('https://example.test/pagar');expect(mail.attachments).toHaveLength(1);
  await expect(save('confirmed')).rejects.toMatchObject({code:'PAYMENT_REQUIRED'});
- await save('confirmed',{paymentConfirmed:true,paymentReference:'COMPROBANTE-QA'});await sendLeadEmails(leadId);
+ await expect(save('confirmed',{paymentConfirmed:true,paymentReference:'COMPROBANTE-QA'})).rejects.toMatchObject({code:'TECHNICIAN_REQUIRED'});
+ const technician=await mutate({action:'technician',name:'Técnico seguimiento QA',phone:'',email:'',active:true,cost4:null,cost8:null,notes:''},staff);
+ await save('confirmed',{paymentConfirmed:true,paymentReference:'COMPROBANTE-QA',technicianIds:[technician.id]});await sendLeadEmails(leadId);
+ const booking=(await operationsData()).bookings.find(b=>b.snapshot.request.email==='qa@example.test'&&b.status==='confirmed');
+ expect(booking).toBeDefined();expect(booking.technicians).toEqual([{id:technician.id,name:'Técnico seguimiento QA'}]);
+ await expect(save('confirmed',{estimatedValue:1,paymentReference:'COMPROBANTE-QA'})).rejects.toMatchObject({code:'VALUE_LOCKED'});
  expect((await db.query('SELECT count(*)::int n FROM unit_allocation WHERE lead_id=$1 AND active',[leadId])).rows[0].n).toBe(3);
  await save('confirmed',{note:'Pago revisado',paymentReference:'COMPROBANTE-QA'});await sendLeadEmails(leadId);expect(fetcher).toHaveBeenCalledTimes(3);
  await save('completed');await sendLeadEmails(leadId);expect(fetcher).toHaveBeenCalledTimes(4);
+ await expect(save('completed',{note:'Intento de editar cierre'})).rejects.toMatchObject({code:'RENTAL_CLOSED'});
+ expect((await db.query('SELECT active FROM technician_allocation WHERE booking_id=$1',[booking.id])).rows.every(a=>!a.active)).toBe(true);
  expect((await db.query('SELECT count(*)::int n FROM unit_allocation WHERE lead_id=$1 AND active',[leadId])).rows[0].n).toBe(0);
  expect((await db.query('SELECT count(*)::int n FROM notification_outbox WHERE lead_id=$1',[leadId])).rows[0].n).toBe(4);
 });
@@ -155,4 +163,39 @@ it('marks a request lost without sending email, and rejects invalid PDF uploads 
  await updateLead(leadId,{...base,stage:'lost'},staff);
  expect((await db.query('SELECT stage FROM lead WHERE id=$1',[leadId])).rows[0].stage).toBe('lost');
  expect((await db.query('SELECT 1 FROM notification_outbox WHERE lead_id=$1',[leadId])).rowCount).toBe(0);
+});
+
+it('rejects a busy technician without creating a partial reservation',async()=>{
+ const technician=await mutate({action:'technician',name:'Técnico único QA',phone:'',email:'',active:true,cost4:null,cost8:null,notes:''},staff);
+ const pdf=Buffer.from('%PDF-1.4\nQA\n%%EOF').toString('base64');
+ async function prepare(equipment:string){
+  const q=await createQuote({equipment,quantity:3,days:1,date:'2038-10-15',start:'10:00',durationHours:8,city:'Bogota',address:'QA',contentStatus:'ready',name:'QA disponibilidad',company:'QA',email:'availability@example.test',phone:'+573001234567',nit:'900123456',notes:'',privacy:true},randomUUID());
+  const leadId=(await db.query('SELECT lead_id FROM quote WHERE id=$1',[q.id])).rows[0].lead_id;
+  const base={ownerId:null,estimatedValue:1000000,note:''};
+  await updateLead(leadId,{...base,expectedVersion:0,stage:'quoted',attachment:{filename:'qa.pdf',content:pdf}},staff);
+  await updateLead(leadId,{...base,expectedVersion:1,stage:'awaiting_payment',paymentUrl:'https://example.test/pay'},staff);
+  return {leadId,base};
+ }
+ const first=await prepare('QUEST3'),second=await prepare('QUEST2');
+ const confirm={expectedVersion:2,stage:'confirmed',paymentConfirmed:true,paymentReference:'QA',technicianIds:[technician.id]};
+ await updateLead(first.leadId,{...first.base,...confirm},staff);
+ await expect(updateLead(second.leadId,{...second.base,...confirm},staff)).rejects.toMatchObject({status:409});
+ expect((await db.query('SELECT stage,stage_version FROM lead WHERE id=$1',[second.leadId])).rows[0]).toMatchObject({stage:'awaiting_payment',stage_version:2});
+ expect((await db.query('SELECT 1 FROM unit_allocation WHERE lead_id=$1',[second.leadId])).rowCount).toBe(0);
+ expect((await db.query('SELECT 1 FROM booking b JOIN quote q ON q.id=b.quote_id WHERE q.lead_id=$1',[second.leadId])).rowCount).toBe(0);
+ await updateLead(first.leadId,{...first.base,expectedVersion:3,stage:'completed'},staff);
+});
+
+it('adds an older confirmed request to reservations when assigning its technician',async()=>{
+ const q=await createQuote({equipment:'QUEST3',quantity:3,days:1,date:'2039-10-15',start:'10:00',durationHours:8,city:'Bogota',address:'QA',contentStatus:'ready',name:'QA anterior',company:'QA',email:'legacy@example.test',phone:'+573001234567',nit:'900123456',notes:'',privacy:true},randomUUID());
+ const saved=(await db.query('SELECT * FROM quote WHERE id=$1',[q.id])).rows[0];
+ await db.query("UPDATE lead SET stage='confirmed',estimated_value_cop=1000000 WHERE id=$1",[saved.lead_id]);
+ const units=(await db.query('SELECT id FROM inventory_unit WHERE equipment_id=$1 AND NOT is_fixture LIMIT 3',[saved.equipment_id])).rows;
+ for(const unit of units)await db.query("INSERT INTO unit_allocation(inventory_unit_id,lead_id,kind,period,reason) VALUES($1,$2,'manual',tstzrange($3,$4,'[)'),'QA anterior')",[unit.id,saved.lead_id,saved.event_start,saved.event_end]);
+ const technician=await mutate({action:'technician',name:'Técnico alquiler anterior QA',phone:'',email:'',active:true,cost4:null,cost8:null,notes:''},staff);
+ await updateLead(saved.lead_id,{stage:'confirmed',expectedVersion:0,estimatedValue:1000000,ownerId:null,note:'',technicianIds:[technician.id]},staff);
+ const booking=(await operationsData()).bookings.find(b=>b.quote_id===q.id);
+ expect(booking).toBeDefined();expect(booking.assets).toHaveLength(3);expect(booking.technicians).toHaveLength(1);
+ expect((await db.query('SELECT 1 FROM unit_allocation WHERE lead_id=$1 AND active',[saved.lead_id])).rowCount).toBe(3);
+ await updateLead(saved.lead_id,{stage:'completed',expectedVersion:1,estimatedValue:1000000,ownerId:null,note:''},staff);
 });
