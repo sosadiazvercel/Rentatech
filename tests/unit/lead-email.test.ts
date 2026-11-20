@@ -16,6 +16,16 @@ describe('correos de alquiler',()=>{
   expect(mail.text).toContain('Total estimado: $ 1.060.000');
  });
 
+ it('separa el destinatario del cliente del destinatario administrativo',()=>{
+  process.env.EMAIL_NOTIFICATION_TO='jorgesosadiaz@sosadiazbros.com';
+  const customer=initialMail(request,'RT-Q-000002',false,estimate);
+  const admin=initialMail(request,'RT-Q-000002',true,estimate);
+  expect(customer.to).toEqual(['cliente@example.test']);
+  expect(admin.to).toEqual(['jorgesosadiaz@sosadiazbros.com']);
+  expect(customer.subject).toContain('Recibimos tu solicitud');
+  expect(admin.subject).toContain('Nueva solicitud de alquiler');
+ });
+
  it('incluye un botón de pago y conserva el enlace en texto plano',()=>{
   const mail=stageMail('awaiting_payment',request,'lead-qa','https://example.test/pagar?a=1&b=2');
   expect(mail.html).toContain('Ir al pago seguro');

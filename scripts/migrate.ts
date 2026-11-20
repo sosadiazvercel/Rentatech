@@ -11,6 +11,7 @@ const migrationSignals:Record<string,string>={
  '0006_product_management.sql':"SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='equipment' AND column_name='slug') AS applied",
  '0007_basic_staff_auth.sql':"SELECT to_regclass('public.staff_session') IS NOT NULL AS applied",
  '0008_lead_workflow.sql':"SELECT to_regclass('public.lead_attachment') IS NOT NULL AS applied",
+ '20261120210114_calendar_settings.sql':"SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='rental_settings' AND column_name='google_calendar_id') AS applied",
 };
 async function baselineExistingSchema(db:pg.Client,files:string[]){
  if((await db.query('SELECT 1 FROM public.schema_migrations LIMIT 1')).rowCount)return;

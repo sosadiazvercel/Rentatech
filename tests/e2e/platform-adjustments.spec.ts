@@ -28,11 +28,12 @@ test('quote validates identification, includes rental days and displays only the
  await page.getByRole('button',{name:'Continuar',exact:true}).click();
  await expect(page.locator('aside')).toContainText('2 jornadas de hasta 8 horas');
  await page.getByLabel('Dirección o lugar del alquiler').fill('Lugar QA');await page.getByRole('button',{name:'Continuar',exact:true}).click();
- await expect(page.getByLabel('Código internacional')).toHaveValue('+57');
+ await expect(page.getByRole('button',{name:/Código internacional, Colombia \+57/})).toBeVisible();
  await page.getByLabel('Nombre de contacto').fill('Cliente QA');await page.getByLabel('Correo electronico').fill('qa@example.test');await page.getByLabel('Teléfono / WhatsApp').fill('3001234567');
- await page.getByLabel('Código internacional').selectOption('+51');await expect(page.getByLabel('Teléfono / WhatsApp')).toHaveValue('3001234567');
- await page.getByLabel('Código internacional').selectOption('+57');await expect(page.locator('.phone-country')).toContainText('+57');await expect(page.locator('.phone-country img')).toHaveAttribute('src','/images/flags/co.svg');
- await page.screenshot({path:'test-results/quote-phone-control.png',fullPage:true});
+ await page.getByRole('button',{name:/Código internacional/}).click();await expect(page.getByRole('option')).toHaveCount(18);await expect(page.getByRole('option').locator('img')).toHaveCount(18);
+ await page.getByRole('option',{name:'Perú +51'}).click();await expect(page.getByLabel('Teléfono / WhatsApp')).toHaveValue('3001234567');
+ await page.getByRole('button',{name:/Código internacional/}).click();await page.getByRole('option',{name:'Colombia +57'}).click();await expect(page.locator('.phone-country')).toContainText('+57');await expect(page.locator('.phone-country-trigger img')).toHaveAttribute('src','/images/flags/co.svg');
+ await page.getByRole('button',{name:/Código internacional/}).click();await page.screenshot({path:'test-results/quote-phone-control.png',fullPage:true});await page.keyboard.press('Escape');
  await page.getByRole('button',{name:'Continuar',exact:true}).click();await expect(page.getByRole('alert',{name:'Error del cotizador'})).toContainText('NIT');
  await page.getByLabel('NIT / Cédula').fill('900123456');await page.getByRole('button',{name:'Continuar',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Resumen de cotizacion'})).toBeVisible();
@@ -67,7 +68,7 @@ test('request detail handles current rental fields and adapts follow-up to each 
   await page.screenshot({path:'test-results/lead-followup-mobile.png',fullPage:true});
   await page.goto('/admin/operaciones');await page.getByRole('button',{name:'Inventario',exact:true}).click();
   const model=page.locator('tbody a[href^="/admin/productos?modelo="]').first();await expect(model).toBeVisible();const name=await model.textContent();await model.click();await expect(page.getByRole('heading',{name:'Editar producto',exact:true})).toBeVisible();await expect(page.getByLabel('Nombre del producto',{exact:true})).toHaveValue(name!);
-  await page.goto('/admin/calendario');await expect(page.getByRole('heading',{name:'Calendario de reservas',exact:true})).toBeVisible();
+  await page.goto('/admin/calendario');await expect(page.getByRole('heading',{name:'Calendario de reservas',exact:true})).toBeVisible();await expect(page.getByLabel('ID del calendario')).toBeVisible();await expect(page.getByRole('button',{name:'Guardar y mostrar calendario'})).toBeVisible();
   await db.query("UPDATE lead SET stage='completed' WHERE id=$1",[leadId]);await page.goto(`/admin/leads/${leadId}`);
   await expect(page.getByLabel('Etapa',{exact:true})).toBeDisabled();await expect(page.locator('input[name="estimatedValue"]')).toBeDisabled();await expect(page.locator('textarea[name="note"]')).toBeDisabled();await expect(page.getByRole('button',{name:'Finalizar alquiler',exact:true})).toHaveCount(0);
  }finally{
