@@ -1,4 +1,4 @@
-# RENTATECH · Sprint 2
+# RENTATECH · Sprint 2 -
 
 Aplicación local de prueba para alquiler operado de tecnología. Sprint 2 añade inventario individual, disponibilidad por fecha, tarifas versionadas, cotizador, cotizaciones históricas y reservas con asignación transaccional de equipos y técnicos. Pagos manuales registrados, sin pasarela ni movimientos de dinero.
 
