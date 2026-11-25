@@ -20,9 +20,9 @@ Variables del servidor:
 
 ```dotenv
 RESEND_API_KEY=<clave del proveedor>
-EMAIL_FROM=<remitente verificado>
+EMAIL_FROM="Rentatech <alquiler@rentatech.co>"
 EMAIL_NOTIFICATION_TO=jorgesosadiaz@sosadiazbros.com
-EMAIL_REPLY_TO=jorgesosadiaz@sosadiazbros.com
+EMAIL_REPLY_TO=alquiler@rentatech.co
 ```
 
 Los correos se registran dentro de la transacción y se envían después de confirmar los cambios. Guardar notas o volver a adjuntar el mismo PDF no genera otro correo. Una transición o un PDF/enlace nuevo genera una notificación independiente. Los reintentos conservan contenido y clave de idempotencia. Los envíos sin confirmación durante más de 23 horas requieren revisar el proveedor antes de repetirlos. El detalle de la solicitud permite consultar estados y reintentar pendientes.

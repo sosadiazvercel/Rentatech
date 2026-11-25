@@ -25,7 +25,7 @@ async function sendMail(id:string){
   const attachment=row.attachment_id?(await db.query('SELECT filename,data FROM lead_attachment WHERE id=$1',[row.attachment_id])).rows[0]:null;
   const response=await fetch('https://api.resend.com/emails',{
    method:'POST',headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY}`,'Content-Type':'application/json','Idempotency-Key':`quote/${id}`},
-   body:JSON.stringify({from:process.env.EMAIL_FROM,...row.payload,reply_to:(process.env.EMAIL_REPLY_TO||'jorgesosadiaz@sosadiazbros.com'),...(attachment?{attachments:[{filename:attachment.filename,content:attachment.data.toString('base64')}]}:{})}),signal:AbortSignal.timeout(10000),
+   body:JSON.stringify({from:process.env.EMAIL_FROM,...row.payload,reply_to:(process.env.EMAIL_REPLY_TO||'alquiler@rentatech.co'),...(attachment?{attachments:[{filename:attachment.filename,content:attachment.data.toString('base64')}]}:{})}),signal:AbortSignal.timeout(10000),
   });
   const body=await response.json();
   if(!response.ok||!body.id){
