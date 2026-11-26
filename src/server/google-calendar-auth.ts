@@ -23,7 +23,7 @@ export async function authorizeCalendarScript(req:Request){
  const authorization=req.headers.get('authorization')||'';
  if(!authorization.startsWith('Bearer ')||authorization.length>16384)throw new HttpError(401,'AUTH_REQUIRED','Autoriza la cuenta de Google del script.');
  const token=authorization.slice(7),parts=token.split('.');
- const denied=()=>new HttpError(401,'GOOGLE_IDENTITY_INVALID','La identidad de Google no es válida para este calendario.');
+ const denied=(code='GOOGLE_IDENTITY_INVALID')=>new HttpError(401,code,'La identidad de Google no es válida para este calendario.');
  if(parts.length!==3||parts.some(part=>!part||!/^[A-Za-z0-9_-]+$/.test(part)))throw denied();
  let header,claims;
  try{header=JSON.parse(Buffer.from(parts[0],'base64url').toString('utf8'));claims=JSON.parse(Buffer.from(parts[1],'base64url').toString('utf8'));}catch{throw denied();}
@@ -33,8 +33,13 @@ export async function authorizeCalendarScript(req:Request){
  let valid=false;
  try{valid=verify('RSA-SHA256',Buffer.from(parts[0]+'.'+parts[1]),createPublicKey({key,format:'jwk'}),Buffer.from(parts[2],'base64url'));}catch{throw denied();}
  const now=Math.floor(Date.now()/1000);
- if(!valid||!['accounts.google.com','https://accounts.google.com'].includes(claims.iss)||claims.aud!==audience||
-  typeof claims.sub!=='string'||!claims.sub||typeof claims.exp!=='number'||claims.exp<=now||
-  typeof claims.iat!=='number'||claims.iat>now+60||claims.email_verified!==true||
-  typeof claims.email!=='string'||claims.email.toLowerCase()!==email)throw denied();
+ if(!valid)throw denied('GOOGLE_SIGNATURE_INVALID');
+ if(!['accounts.google.com','https://accounts.google.com'].includes(claims.iss))throw denied('GOOGLE_ISSUER_INVALID');
+ if(claims.aud!==audience)throw denied('GOOGLE_AUDIENCE_MISMATCH');
+ if(typeof claims.sub!=='string'||!claims.sub)throw denied('GOOGLE_SUBJECT_INVALID');
+ if(typeof claims.exp!=='number'||claims.exp<=now||typeof claims.iat!=='number'||claims.iat>now+60)throw denied('GOOGLE_TOKEN_EXPIRED');
+ // Google documents this claim as a boolean in ID tokens, while some Google
+ // identity responses expose the equivalent string value.
+ if(claims.email_verified!==true&&claims.email_verified!=='true')throw denied('GOOGLE_EMAIL_UNVERIFIED');
+ if(typeof claims.email!=='string'||claims.email.toLowerCase()!==email)throw denied('GOOGLE_EMAIL_MISMATCH');
 }

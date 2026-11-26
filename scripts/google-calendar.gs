@@ -14,7 +14,7 @@ function syncRentatechCalendar() {
     const response = UrlFetchApp.fetch(url.replace(/\/$/, '') + '/api/v1/calendar-sync', {
       headers: {Authorization: 'Bearer ' + identity}, muteHttpExceptions: true,
     });
-    if (response.getResponseCode() !== 200) throw new Error('No se pudo consultar Rentatech: ' + response.getResponseCode());
+    if (response.getResponseCode() !== 200) throw new Error('No se pudo consultar Rentatech: ' + response.getResponseCode() + ' - ' + response.getContentText());
     const payload = JSON.parse(response.getContentText());
     if (!Array.isArray(payload.events)) throw new Error('Respuesta inválida; no se modificó el calendario.');
     // Validate the entire snapshot before changing or removing any events.

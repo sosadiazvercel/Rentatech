@@ -20,8 +20,18 @@ afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals();});
 it('accepts the authorized Google account and intended script without a configured shared secret',async()=>{
  configure();await expect(authorizeCalendarScript(request())).resolves.toBeUndefined();
 });
+it('accepts the Google-compatible string representation of email_verified',async()=>{
+ configure();await expect(authorizeCalendarScript(request({email_verified:'true'}))).resolves.toBeUndefined();
+});
 it.each([{aud:'another-script'},{email:'outsider@example.test'},{email_verified:false},{exp:0},{iss:'https://example.test'},{iat:Math.floor(Date.now()/1000)+86400}])('rejects invalid Google identity claims %j',async patch=>{
  configure();await expect(authorizeCalendarScript(request(patch))).rejects.toMatchObject({status:401});
+});
+it.each([
+ [{aud:'another-script'},'GOOGLE_AUDIENCE_MISMATCH'],
+ [{email:'outsider@example.test'},'GOOGLE_EMAIL_MISMATCH'],
+ [{email_verified:false},'GOOGLE_EMAIL_UNVERIFIED'],
+] as const)('reports a safe diagnostic code for rejected claims %j',async(patch,code)=>{
+ configure();await expect(authorizeCalendarScript(request(patch))).rejects.toMatchObject({status:401,code});
 });
 it('rejects a forged signature even when the email and audience match',async()=>{
  configure();const attacker=generateKeyPairSync('rsa',{modulusLength:2048});
