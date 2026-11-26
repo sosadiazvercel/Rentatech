@@ -1,12 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Image from 'next/image';
 import Script from 'next/script';
 import { SiteHeader } from '@/components/site-header';
 import { getPublicProducts } from '@/server/public-products';
 import './globals.css';
 
 export const metadata: Metadata = {
-    title: { default: 'RENTA TECH · Realidad virtual', template: '%s · RENTA TECH' },
+    metadataBase: new URL('https://rentatech.co'),
+    title: { default: 'RENTA TECH · Equipos para eventos', template: '%s · RENTA TECH' },
     description: 'Renta de Meta Quest 2 y Meta Quest 3 para eventos y experiencias de realidad virtual.',
     icons: { icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }] },
     robots: { index: false, follow: false },
@@ -18,9 +20,9 @@ export default async function Layout({ children }: { children: React.ReactNode }
         <SiteHeader products={products} />
         <main id="contenido">{children}</main>
         <footer className="footer"><div className="wrap footer-inner">
-            <div><Link className="brand" href="/">RENTA TECH</Link><p>Renta de tecnologia para eventos. Bogota, Colombia.</p></div>
+            <div><Link className="brand" href="/" aria-label="RENTA TECH, inicio"><Image src="/images/rentatech-logo.svg" alt="RENTA TECH" width={116} height={66}/></Link><p>Renta de tecnologia para eventos. Bogota, Colombia.</p></div>
             <nav className="footer-links" aria-label="Informacion">
-                <Link href="/vr">Realidad virtual</Link>
+                <Link href="/equipos">Equipos</Link>
                 <Link href="/cotizar">Cotizar</Link>
                 {/* <Link href="/politicas/privacidad">Privacidad</Link>
    <Link href="/creditos">Creditos de imagenes</Link> */}

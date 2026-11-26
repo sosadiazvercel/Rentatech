@@ -56,6 +56,22 @@ export async function updateLead(id:string,raw:unknown,staff:Staff){
    if(!v.attachment.filename.toLowerCase().endsWith('.pdf')||content.subarray(0,5).toString()!=='%PDF-'||content.length>5*1024*1024||content.length<8)throw new HttpError(422,'INVALID_ATTACHMENT','Adjunta un PDF válido de máximo 5 MB');
    attachmentId=(await db.query('INSERT INTO public.lead_attachment(lead_id,filename,data,digest) VALUES($1,$2,$3,$4) ON CONFLICT(lead_id,digest) DO UPDATE SET digest=EXCLUDED.digest RETURNING id',[id,v.attachment.filename.replace(/[^a-zA-Z0-9._ -]/g,'_'),content,hash(content.toString('base64'))])).rows[0].id;
   }
+  if(v.request){
+   const structural=['equipment','quantity','days','date','start','durationHours'] as const;
+   const changed=structural.some(key=>String(v.request![key])!==String(old.request[key]??(key==='days'?1:key==='durationHours'?8:'')));
+   if(old.stage==='confirmed'&&changed)throw new HttpError(409,'CONFIRMED_EVENT_LOCKED','Cancela y vuelve a reservar para cambiar fechas, equipo o cantidades.');
+   const request={...old.request,...v.request};
+   if(old.stage!=='confirmed'&&(changed||(['city','address','contentStatus'] as const).some(key=>v.request![key]!==old.request[key]))){
+    const prior=(await db.query('SELECT * FROM quote WHERE lead_id=$1 ORDER BY version DESC LIMIT 1',[id])).rows[0];
+    if(prior){
+     if(prior.status==='accepted')throw new HttpError(409,'CONFIRMED_EVENT_LOCKED','La cotización ya está reservada.');
+     await saveQuote(db,{...request,privacy:true},id,prior.version+1,prior.snapshot.overrides??{});
+     await db.query("UPDATE quote SET status='superseded' WHERE lead_id=$1 AND version<=$2 AND status NOT IN ('accepted','cancelled','superseded')",[id,prior.version]);
+    }
+   }
+   await db.query('UPDATE lead SET request=$2 WHERE id=$1',[id,JSON.stringify(request)]);
+   old.request=request;
+  }
   const transition=old.stage!==v.stage;
   if(transition&&old.stage==='confirmed'&&!['completed','lost'].includes(v.stage))throw new HttpError(409,'RENTAL_CONFIRMED','Un alquiler confirmado solo puede finalizarse o marcarse perdido');
   if(transition&&v.stage==='awaiting_payment'&&old.stage!=='quoted')throw new HttpError(422,'QUOTE_FIRST','Envía la cotización antes de registrar su aprobación');
@@ -93,6 +109,11 @@ export async function updateLead(id:string,raw:unknown,staff:Staff){
     const bookingId=randomUUID(),total=Number(old.estimated_value_cop??quote.total_cop);
     await db.query(`INSERT INTO booking(id,quote_id,status,confirmed_at,terms_version,terms_accepted_at,accepted_contact,request_key,public_token_hash,token_expires_at,balance_due_at,total_cop,deposit_cop)
      VALUES($1,$2,'confirmed',now(),$3,now(),$4,$5,$6,$7,$8,$9,$10)`,[bookingId,quote.id,quote.policy_version,r.name||'Cliente','lead-confirm:'+id,hash(randomUUID()),p.end,p.from,total,Math.min(Number(quote.deposit_cop),total)]);
+    if(transition&&v.paymentConfirmed&&total>0){
+     if((await db.query('SELECT id FROM payment WHERE reference=$1',[v.paymentReference])).rowCount)throw new HttpError(409,'PAYMENT_REFERENCE_USED','La referencia de pago ya fue registrada.');
+     await db.query("INSERT INTO payment(booking_id,purpose,reference,status,application_status,expected_cop,received_cop,environment,approved_at,method,recorded_by) VALUES($1,'balance',$2,'approved','applied',$3,$3,$4,now(),'manual',$5)",[bookingId,v.paymentReference,total,process.env.APP_ENV==='development'?'test':'prod',staff.id]);
+    }
+    if(transition&&v.paymentConfirmed)await db.query("UPDATE booking SET paid_cop=total_cop,payment_status='PAID' WHERE id=$1",[bookingId]);
     for(const unit of units)await db.query("INSERT INTO unit_allocation(inventory_unit_id,lead_id,booking_id,kind,period) VALUES($1,$2,$3,'use',tstzrange($4,$5,'[)'))",[unit.id,id,bookingId,p.from,p.to]);
     await assignStaff(db,v.technicianIds,bookingId,p.from,p.to,quote.technician_count,quote.snapshot.technicianUnit??0,checked.data.durationHours);
     await db.query("UPDATE quote SET status='accepted' WHERE id=$1",[quote.id]);

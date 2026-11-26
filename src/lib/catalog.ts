@@ -6,7 +6,7 @@ export type CatalogFields={slug:string;brand:string;description:string;summary:s
 export type CatalogProduct=CatalogFields&{code:string;name:string;inventory:number;image_version:string|null};
 export type AdminProduct={id:string;code:string;name:string;slug:string;brand:string;description:string;summary:string;categories:string[];specifications:[string,string][];published:boolean;active:boolean;featured:boolean;sortOrder:number;updatedAt:string;image_version:string|null;inventory:number;tiers:ProductTier[]};
 const text=(max:number)=>z.string().trim().max(max);
-const tier=z.object({min:z.number().int().min(3).max(10000),max:z.number().int().min(3).max(10000),unit:z.number().int().min(0).max(1000000000).nullable()}).strict();
+const tier=z.object({min:z.number().int().min(1).max(10000),max:z.number().int().min(1).max(10000),unit:z.number().int().min(0).max(1000000000).nullable()}).strict();
 export const productSchema=z.object({
  id:z.uuid().optional(),expectedUpdatedAt:z.iso.datetime().optional(),expectedPricingId:z.uuid(),
  code:z.string().trim().regex(/^[A-Z0-9][A-Z0-9_-]{0,39}$/,'Usa un código único en mayúsculas, sin espacios.'),

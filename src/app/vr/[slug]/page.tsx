@@ -16,7 +16,7 @@ export default async function Product({params}:{params:Promise<{slug:string}>}){
  const product=await getPublicProduct(slug);
  if(!product)notFound();
  return <div className="wrap">
-  <p className="breadcrumb"><Link href="/vr">{product.category}</Link>{product.brand&&<> / {product.brand}</>} / {product.title}</p>
+  <p className="breadcrumb"><Link href="/equipos">{product.category}</Link>{product.brand&&<> / {product.brand}</>} / {product.title}</p>
   <section className={s.productDetail}>
    <div className={`${s.detailImage} product-image-frame`}><Headset model={product.code} image={product.image} title={product.title}/></div>
    <div className={s.detailPanel}>

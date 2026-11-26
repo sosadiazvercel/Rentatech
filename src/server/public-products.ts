@@ -27,9 +27,9 @@ const known:Record<string,ProductMeta>={
 
 const generic:ProductMeta={
  image:'/images/product-placeholder.svg',
- text:'Equipo de realidad virtual disponible para eventos y experiencias inmersivas.',
- meta:'Realidad virtual / inventario operativo',
- specs:[['Tipo','Realidad virtual'],['Operacion','Acompanamiento tecnico'],['Disponibilidad','Sujeta a validacion']],
+ text:'Tecnología disponible para tus eventos y experiencias interactivas.',
+ meta:'Equipo para eventos',
+ specs:[['Tipo','Equipo para eventos'],['Operacion','Acompanamiento tecnico'],['Disponibilidad','Sujeta a validacion']],
 };
 
 function slugify(value:string){
@@ -67,12 +67,12 @@ export async function getPublicProducts():Promise<PublicProduct[]>{
    code:product.code,
    title:product.name,
    slug:'slug' in product?product.slug:slugify(product.name||product.code),
-   href:`/vr/${'slug' in product?product.slug:slugify(product.name||product.code)}`,
+   href:`/equipos/${'slug' in product?product.slug:slugify(product.name||product.code)}`,
    category:'categories' in product?product.categories[0]:'Realidad virtual',
    categories:'categories' in product?product.categories:['Realidad virtual',...(product.code==='QUEST3'?['Realidad mixta']:[])],
    brand:'brand' in product?product.brand:'Meta',
    featured:'featured' in product?product.featured:true,
-   price:price?.hardware!=null?money(Math.round(price.hardware/3)):'Por revisar',
+   price:price?.hardwareUnit!=null?money(price.hardwareUnit):'Por revisar',
    inventory:product.inventory,
    image:'image_version' in product&&product.image_version?`/api/v1/products/${encodeURIComponent(product.code)}/image?v=${product.image_version}`:meta.image,
    text:'description' in product?product.description:meta.text,

@@ -6,7 +6,7 @@ import {migrate} from '../../scripts/migrate';
 import {seed} from '../../scripts/seed';
 import {createLead,updateLead} from '@/server/leads';
 import {createBasicSession} from '@/server/auth';
-import {createCalendarEvent,listCalendarEvents} from '@/server/manual-calendar';
+import {createCalendarEvent,listCalendarEvents,updateCalendarEvent,deleteCalendarEvent} from '@/server/manual-calendar';
 import {pool} from '@/server/db';
 import {validLead} from '../fixture';
 let db:pg.Client;
@@ -26,7 +26,7 @@ describe('PostgreSQL migration and CRM',()=>{
  it('baselines a pre-existing contiguous schema when migration history is missing',async()=>{
   await db.query('TRUNCATE public.schema_migrations');
   await migrate(process.env.DATABASE_URL!,true);
-  expect((await db.query('SELECT count(*)::int n FROM schema_migrations')).rows[0].n).toBe(10);
+  expect((await db.query('SELECT count(*)::int n FROM schema_migrations')).rows[0].n).toBe(11);
   expect((await db.query("SELECT to_regclass('public.staff_session') IS NOT NULL ok")).rows[0].ok).toBe(true);
  });
  it('creates an opaque server-side session for the built-in administrator',async()=>{
@@ -40,6 +40,10 @@ describe('PostgreSQL migration and CRM',()=>{
   expect((await listCalendarEvents('2031-10-01T00:00:00.000Z','2031-11-01T00:00:00.000Z')).map(item=>item.id)).toContain(event.id);
   await expect(createCalendarEvent({title:'Alquiler inválido',date:'2031-10-16',start:'17:00',endDate:'2031-10-16',end:'09:00',location:'',notes:''},admin)).rejects.toMatchObject({status:422});
   for(const role of ['anon','authenticated']){await db.query(`SET ROLE ${role}`);await expect(db.query('SELECT * FROM calendar_event')).rejects.toThrow();await db.query('RESET ROLE');}
+  await updateCalendarEvent(event.id,{title:'Alquiler actualizado',date:'2031-10-17',start:'10:00',endDate:'2031-10-18',end:'12:00',location:'Lugar nuevo',notes:'Nuevo contexto'},admin);
+  expect((await listCalendarEvents('2031-10-01T00:00:00Z','2031-11-01T00:00:00Z')).find(item=>item.id===event.id)).toMatchObject({title:'Alquiler actualizado',source:'manual',location:'Lugar nuevo'});
+  await deleteCalendarEvent({id:event.id,source:'manual'},admin);
+  expect((await listCalendarEvents('2031-10-01T00:00:00Z','2031-11-01T00:00:00Z')).some(item=>item.id===event.id)).toBe(false);
  });
  it('denies direct public and authenticated access to PII and pricing',async()=>{for(const role of ['anon','authenticated']){await db.query(`SET ROLE ${role}`);await expect(db.query('SELECT * FROM customer')).rejects.toThrow();await expect(db.query('SELECT * FROM pricing_version')).rejects.toThrow();await db.query('RESET ROLE');}});
  it('rejects blank serials and bad foreign keys',async()=>{

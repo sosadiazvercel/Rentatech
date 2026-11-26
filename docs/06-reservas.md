@@ -92,3 +92,27 @@ Saldo: vence dos días calendario antes del inicio. Recordatorio manual al princ
 | R15 | Cotización vence durante hold vigente | Hold conserva precio aceptado hasta su propio vencimiento |
 
 La simultaneidad debe probarse contra PostgreSQL real, no solo mocks en memoria.
+# Ajustes de noviembre de 2026
+
+Las reservas confirmadas aparecen automáticamente en el calendario interno. Los eventos manuales se crean al pulsar un día, con esa fecha preseleccionada, y se pueden editar o eliminar. Cancelar una reserva desde el calendario conserva el historial y libera sus asignaciones. Las reservas completadas y los servicios en curso se consultan desde «Ver historial y servicios en curso» en Operaciones.
+
+Los responsables iniciales son Jorge y Felipe. La migración `20261126195616_staff_names_and_confirmed_payments.sql` agrega los nombres y repara exclusivamente pagos del antiguo flujo de confirmación que tengan referencia y evidencia en auditoría. Confirmar desde seguimiento ahora registra el pago verificado. No se marca una reserva pagada solo por estar confirmada.
+
+El contexto del alquiler se edita desde seguimiento. Las cotizaciones anteriores conservan sus importes y datos originales. Cambiar equipo, cantidad o fechas antes de confirmar genera una versión nueva. En una reserva confirmada esos campos requieren cancelar y volver a reservar; contacto, NIT, lugar, contenido y notas siguen editables. Finalizado es de solo lectura; Perdido permanece editable y se muestra al final del progreso.
+
+El catálogo usa `/equipos` y `/equipos/[slug]`; los enlaces anteriores `/vr` siguen funcionando. El mínimo es de tres gafas VR y de una unidad para otros equipos, desde un día. Los rangos de tarifa pueden comenzar en una unidad. El archivado retira el producto de la tienda conservando su inventario e historial; eliminar solo es posible si no tiene referencias.
+
+## Activar Google Calendar con Apps Script
+
+1. En la cuenta de Google que administra el calendario, crear un proyecto de Apps Script y pegar el contenido actualizado de `scripts/google-calendar.gs` en `Código.gs`.
+2. En Configuración del proyecto, activar «Mostrar el archivo de manifiesto appsscript.json en el editor». Abrir ese archivo en el editor y reemplazarlo con el contenido de `scripts/appsscript.json`. Esto solicita los permisos de identidad, correo, Calendar, conexiones externas y creación del activador.
+3. En Configuración del proyecto → Propiedades del script, establecer únicamente `RENTATECH_URL=https://rentatech.co` y `RENTATECH_CALENDAR_ID` con el ID del calendario destino. No se necesita crear ni copiar un secreto compartido.
+4. Ejecutar `showRentatechGoogleAccount`, aceptar los permisos y copiar del registro de ejecución los valores públicos `GOOGLE_CALENDAR_SYNC_EMAIL` y `GOOGLE_CALENDAR_CLIENT_ID`. Configurarlos como variables de entorno en el servidor y desplegar estos cambios. El ID de cliente identifica al proyecto de Google; no es el ID del calendario ni una contraseña.
+5. Ejecutar `syncRentatechCalendar` y verificar un evento manual y una reserva confirmada en el calendario destino.
+6. Ejecutar `installRentatechTrigger` una vez. La sincronización automática se ejecuta cada cinco minutos. Incluye altas, ediciones y eliminaciones; solo elimina eventos creados por esta integración. No hay que publicar Apps Script como aplicación web.
+
+Google genera una credencial de identidad de corta duración en cada ejecución. El servidor verifica su firma con las claves públicas de Google, emisor, vencimiento, correo verificado y que pertenezca al proyecto autorizado. El listado de reservas permanece privado. No se guardan credenciales de Google en las propiedades del script ni se imprimen en el registro.
+
+Rentatech es el origen de los datos: los cambios hechos directamente en Google no se importan y pueden sobrescribirse. El calendario interno se actualiza al confirmar; Google lo recibe en la siguiente ejecución. Si falla la consulta o su validación, el script conserva los eventos existentes. Los ID se guardan en propiedades y se usa un bloqueo para evitar ejecuciones simultáneas.
+
+Referencias: [servicio Calendar de Apps Script](https://developers.google.com/apps-script/reference/calendar/calendar-app), [identidad del script](https://developers.google.com/apps-script/reference/script/script-app#getIdentityToken()), [validación de identidad de Google](https://developers.google.com/identity/openid-connect/openid-connect#validatinganidtoken).

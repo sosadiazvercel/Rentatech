@@ -17,7 +17,7 @@ export function HomeHero({products}:{products:PublicProduct[]}){
    <p>Boutique de renta de tecnología para experiencias, eventos y activaciones.</p>
    <div className="actions">
     <Link className="button light" href="/cotizar">Cotizar</Link>
-    <Link className="button ghostDark" href="/vr">Ver equipos</Link>
+    <Link className="button ghostDark" href="/equipos">Ver equipos</Link>
    </div>
   </div>
   <div className={s.heroCounter} aria-live="polite">

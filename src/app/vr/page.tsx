@@ -6,7 +6,7 @@ import s from '@/components/marketing.module.css';
 import {categorySlug} from '@/lib/catalog';
 
 export const dynamic='force-dynamic';
-export const metadata:Metadata={title:'Realidad virtual'};
+export const metadata:Metadata={title:'Nuestros equipos'};
 
 export default async function VR({searchParams}:{searchParams:Promise<{categoria?:string}>}){
  const {categoria}=await searchParams;
@@ -16,16 +16,16 @@ export default async function VR({searchParams}:{searchParams:Promise<{categoria
  return <div className="wrap">
   <div className={s.categoryHead}>
    <div>
-    <p className="breadcrumb">Equipos / Realidad virtual</p>
-    <h1>Realidad Virtual</h1>
+    <p className="breadcrumb">Catálogo / Equipos</p>
+    <h1>Nuestros equipos</h1>
    </div>
-   <p>Equipos Meta listos para eventos y experiencias inmersivas. Renta tecnologia de ultima generacion, sin complicaciones.</p>
+   <p>Equipos únicos de última tecnología para crear experiencias interactivas memorables.</p>
   </div>
   <div className={s.categoryLayout}>
    <aside className={s.filters} aria-label="Explorar">
     <p>Explorar</p>
-    <Link href="/vr" aria-current={!categoria?'page':undefined}>Todos</Link>
-    {categories.map(category=><Link key={category} href={`/vr?categoria=${categorySlug(category)}`} aria-current={categoria===categorySlug(category)?'page':undefined}>{category}</Link>)}
+    <Link href="/equipos" aria-current={!categoria?'page':undefined}>Todos</Link>
+    {categories.map(category=><Link key={category} href={`/equipos?categoria=${categorySlug(category)}`} aria-current={categoria===categorySlug(category)?'page':undefined}>{category}</Link>)}
    </aside>
    {visible.length?<ProductCards products={visible}/>:<p className="notice">No hay productos publicados en esta categoría.</p>}
   </div>

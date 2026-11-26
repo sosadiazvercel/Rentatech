@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import {minimumFor} from './products';
+export const rentalContextSchema=z.object({name:z.string().trim().min(2).max(180),email:z.email().trim().toLowerCase(),phone:z.string().regex(/^\+[1-9]\d{7,14}$/),company:z.string().trim().max(180),nit:z.string().trim().max(40),equipment:z.string().min(1).max(40),quantity:z.number().int().min(1).max(15),days:z.number().int().min(1).max(30),date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),start:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),durationHours:z.number().int().min(4).max(72),city:z.string().trim().min(1).max(180),address:z.string().trim().min(1).max(500),contentStatus:z.enum(['ready','custom']),notes:z.string().trim().max(2000)}).strict().superRefine((v,ctx)=>{if(v.quantity<minimumFor(v.equipment))ctx.addIssue({code:'custom',path:['quantity'],message:'El alquiler de gafas VR requiere mínimo 3 equipos.'});const d=new Date(v.date+'T'+v.start+':00-05:00');if(!Number.isFinite(+d)||d.toLocaleDateString('en-CA',{timeZone:'America/Bogota'})!==v.date)ctx.addIssue({code:'custom',path:['date'],message:'La fecha no existe.'});});
+export type RentalContext=z.infer<typeof rentalContextSchema>;
 const short=z.string().trim().min(1,'Completa este campo').max(180);
 const optional= z.string().trim().max(180).optional();
 export const leadSchema=z.object({
@@ -37,6 +40,7 @@ export function reviewReasons(v:LeadInput,now=Date.now()) {
 export const stageLabels={new:'Nueva solicitud',quoted:'Cotizado',lost:'Perdido',awaiting_payment:'Por pagar',confirmed:'Confirmado',completed:'Finalizado'} as const;
 export const processStages=['new','quoted','awaiting_payment','confirmed','completed'] as const;
 export const leadUpdateSchema=z.object({
+ request:rentalContextSchema.optional(),
  stage:z.enum(['new','quoted','lost','awaiting_payment','confirmed','completed']), expectedVersion:z.number().int().nonnegative(), ownerId:z.uuid().nullable(),
  estimatedValue:z.number().int().nonnegative().max(1000000000).nullable(),
  technicianIds:z.array(z.uuid()).max(100).optional(),

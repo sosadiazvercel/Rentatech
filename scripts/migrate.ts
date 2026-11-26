@@ -3,6 +3,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import pg from 'pg';
 
 const migrationSignals:Record<string,string>={
+ '20261126195616_staff_names_and_confirmed_payments.sql':"SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='staff_profile' AND column_name='display_name') AS applied",
  '0001_foundations.sql':"SELECT to_regclass('public.staff_profile') IS NOT NULL AS applied",
  '0002_required_values.sql':"SELECT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='lost_requires_reason' AND conrelid=to_regclass('public.lead')) OR EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='lead' AND column_name='stage_version') AS applied",
  '0003_sprint2.sql':"SELECT to_regclass('public.rental_settings') IS NOT NULL AS applied",

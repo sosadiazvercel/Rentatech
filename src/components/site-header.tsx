@@ -18,34 +18,34 @@ export function SiteHeader({products}:{products:PublicProduct[]}){
  const openSearch=()=>{setOpen(false);setMegaOpen(false);setSearchOpen(true);};
  const results=useMemo(()=>{
   const q=query.trim().toLowerCase();
-  if(!q)return products;
-  return products.filter(p=>(p.title+' '+p.categories.join(' ')+' '+p.meta+' '+p.code).toLowerCase().includes(q));
+  if(!q)return products.slice(0,3);
+  return products.filter(p=>(p.title+' '+p.categories.join(' ')+' '+p.meta+' '+p.code).toLowerCase().includes(q)).slice(0,3);
  },[products,query]);
  useEffect(()=>{if(searchOpen)inputRef.current?.focus();},[searchOpen]);
  function submitSearch(e:FormEvent){
   e.preventDefault();
-  const target=results[0]?.href??'/vr';
+  const target=results[0]?.href??'/equipos';
   close();
   router.push(target);
  }
  return <header className="header">
   <div className="wrap header-inner">
-   <Link className="brand" href="/" onClick={close}>RENTA TECH<small>by SosaDiaz</small></Link>
+   <Link className="brand" href="/" onClick={close} aria-label="RENTA TECH, inicio"><Image src="/images/rentatech-logo.svg" alt="RENTA TECH" width={116} height={66} priority/><small>by SosaDiaz</small></Link>
    <div className="mobile-actions" aria-label="Acciones rapidas">
     <button className="mobile-icon mobile-search" type="button" aria-label="Buscar" aria-expanded={searchOpen} onClick={openSearch}><span/></button>
-    <a className="button black" href="https://checkout.wompi.co/l/VPOS_iLusWZ">Pagos</a>
+    <a className="button black" href="/pagos">Pagos</a>
     <button className="menu-toggle mobile-icon mobile-burger" type="button" aria-label="Abrir menu" aria-expanded={open} onClick={()=>setOpen(!open)}><span/></button>
    </div>
    <nav className="nav" aria-label="Navegacion principal">
     <div className={`nav-mega-item ${megaOpen?'mega-open':''}`} onMouseEnter={()=>setMegaOpen(true)} onMouseLeave={()=>setMegaOpen(false)} onKeyDown={e=>{if(e.key==='Escape')setMegaOpen(false);}}>
-     <button type="button" className="nav-mega-trigger" aria-expanded={megaOpen} aria-controls="vr-menu" onClick={()=>setMegaOpen(!megaOpen)}>Realidad Virtual <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="m3 6 5 5 5-5" fill="none" stroke="currentColor"/></svg></button>
-     <div id="vr-menu" className="mega-menu" role="group" aria-label="Productos de realidad virtual">
+     <button type="button" className="nav-mega-trigger" aria-expanded={megaOpen} aria-controls="vr-menu" onClick={()=>setMegaOpen(!megaOpen)}>Equipos <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="m3 6 5 5 5-5" fill="none" stroke="currentColor"/></svg></button>
+     <div id="vr-menu" className="mega-menu" role="group" aria-label="Nuestros equipos">
       <div className="mega-inner">
        <div className="mega-browse">
         <p>Explorar</p>
 
-        <Link href="/vr" onMouseEnter={()=>setFeatured(Math.min(1,products.length-1))} onFocus={()=>setFeatured(Math.min(1,products.length-1))} onClick={close}>Todos</Link>
-        {categories.map(category=><Link key={category} href={`/vr?categoria=${categorySlug(category)}`} onMouseEnter={()=>setFeatured(Math.max(0,products.findIndex(p=>p.categories.includes(category))))} onFocus={()=>setFeatured(Math.max(0,products.findIndex(p=>p.categories.includes(category))))} onClick={close}>{category}</Link>)}
+        <Link href="/equipos" onMouseEnter={()=>setFeatured(Math.min(1,products.length-1))} onFocus={()=>setFeatured(Math.min(1,products.length-1))} onClick={close}>Todos</Link>
+        {categories.map(category=><Link key={category} href={`/equipos?categoria=${categorySlug(category)}`} onMouseEnter={()=>setFeatured(Math.max(0,products.findIndex(p=>p.categories.includes(category))))} onFocus={()=>setFeatured(Math.max(0,products.findIndex(p=>p.categories.includes(category))))} onClick={close}>{category}</Link>)}
        </div>
        <div className="mega-featured">
         <p>Destacados</p>
@@ -59,24 +59,24 @@ export function SiteHeader({products}:{products:PublicProduct[]}){
         </div>
        </div>
        <div className="mega-copy">
-        <p>Realidad virtual</p>
-        <span>Equipos Meta Quest probados y listos para eventos, activaciones y experiencias inmersivas.</span>
+        <p>Nuestros equipos</p>
+        <span>Equipos únicos de última tecnología para crear experiencias interactivas memorables.</span>
         <Link href="/cotizar">Solicitar una cotización <ArrowIcon/></Link>
-        <Link href="/vr">Ver todos los equipos <ArrowIcon/></Link>
+        <Link href="/equipos">Ver todos los equipos <ArrowIcon/></Link>
        </div>
       </div>
      </div>
     </div>
     <button className="desktop search-trigger" type="button" aria-expanded={searchOpen} onClick={openSearch}><svg width="13" height="13" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor"/><path d="m12 12 5 5" stroke="currentColor"/></svg>Buscar</button>
     <Link className="button black" href="/cotizar">Solicitar cotizacion</Link>
-    <a className="header-pay-link" href="https://checkout.wompi.co/l/VPOS_iLusWZ">Pagos</a>
+    <a className="header-pay-link" href="/pagos">Pagos</a>
    </nav>
   </div>
   <div className={`site-search ${searchOpen?'open':''}`} role="search">
    <form className="site-search-bar" onSubmit={submitSearch}>
-    <span className="mobile-search" aria-hidden="true"><span/></span>
+    <svg className="search-loupe" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.5"/><path d="m12 12 5 5" stroke="currentColor" strokeWidth="1.5"/></svg>
     <input ref={inputRef} value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Escape'){setSearchOpen(false);setQuery('');}}} placeholder="Buscar producto" aria-label="Buscar producto" autoComplete="off"/>
-    <button type="button" onClick={()=>{setSearchOpen(false);setQuery('');}}>Esc</button>
+    <button type="button" onClick={()=>{setSearchOpen(false);setQuery('');}} aria-label="Cerrar búsqueda">×</button>
    </form>
    <div className="site-search-results" aria-label="Resultados de busqueda">
     {results.length?results.map(p=><Link key={p.href} href={p.href} onClick={close}>
@@ -89,10 +89,10 @@ export function SiteHeader({products}:{products:PublicProduct[]}){
   </div>
   <div className={`mobile-menu ${open?'open':''}`}>
    <nav aria-label="Menu movil">
-    <Link href="/vr" onClick={close}>Realidad virtual <ArrowIcon/></Link>
+    <Link href="/equipos" onClick={close}>Equipos <ArrowIcon/></Link>
     {products.map(p=><Link href={p.href} onClick={close} key={p.code}>{p.title} <ArrowIcon/></Link>)}
     <Link href="/cotizar" onClick={close}>Cotizar <ArrowIcon/></Link>
-    <a href="https://checkout.wompi.co/l/VPOS_iLusWZ" onClick={close}>Pagos <ArrowIcon/></a>
+    <a href="/pagos" onClick={close}>Pagos <ArrowIcon/></a>
    </nav>
   </div>
  </header>;

@@ -5,16 +5,15 @@ import {getPublicProducts} from '@/server/public-products';
 export const dynamic='force-dynamic';
 
 export default async function Home() {
- const products=(await getPublicProducts()).filter(p=>p.featured);
+ const products=(await getPublicProducts()).filter(p=>p.featured).slice(0,3);
  return <div className="home-page">
   <HomeHero products={products}/>
   <section className="section home-catalog">
    <div className="section-heading">
     <div>
-     <p className="eyebrow">Nuestros equipos</p>
-     <h2>Realidad Virtual</h2>
+     <h2>Nuestros equipos</h2>
     </div>
-    <p>Equipos de realidad virtual listos para crear experiencias memorables.</p>
+    <p>Equipos únicos de última tecnología para crear experiencias interactivas memorables.</p>
    </div>
    <ProductCards products={products} compact/>
   </section>

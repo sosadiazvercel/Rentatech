@@ -1,10 +1,11 @@
 import {z} from 'zod';
+import {minimumFor} from './products';
 
 export const money=(n:number)=>new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(n);
 
 const amount=z.number().int().min(0).max(1000000000);
-const tier=z.object({product:z.string().min(1).max(40),min:z.number().int().min(3),max:z.number().int().max(10000),unit:amount.nullable()}).strict().refine(v=>v.max>=v.min);
-const staffRule=z.object({min:z.number().int().min(3),max:z.number().int().max(10000),count:z.number().int().min(1).max(100)}).strict().refine(v=>v.max>=v.min);
+const tier=z.object({product:z.string().min(1).max(40),min:z.number().int().min(1),max:z.number().int().max(10000),unit:amount.nullable()}).strict().refine(v=>v.max>=v.min);
+const staffRule=z.object({min:z.number().int().min(1),max:z.number().int().max(10000),count:z.number().int().min(1).max(100)}).strict().refine(v=>v.max>=v.min);
 const contentConfig=z.object({upToQuantity:z.number().int().min(3).max(10000).default(10),upToPrice:amount.default(250000),abovePrice:amount.default(350000)}).strict();
 
 export const rulesSchema=z.object({
@@ -31,7 +32,7 @@ export type Rules=z.infer<typeof rulesSchema>;
 
 export const eventSchema=z.object({
  equipment:z.string().min(1).max(40),
- quantity:z.number().int().min(3,'Para garantizar una operacion adecuada, nuestros servicios VR tienen un minimo de 3 equipos.').max(15,'El cotizador automatico cubre hasta 15 visores.'),
+ quantity:z.number().int().min(1,'Indica al menos un equipo.').max(15,'El cotizador automatico cubre hasta 15 visores.'),
  days:z.number().int().min(1,'Indica al menos 1 dia de alquiler').max(30).default(1),
  date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/,'Selecciona la fecha del evento'),
  start:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/,'Selecciona una hora valida'),
@@ -40,6 +41,7 @@ export const eventSchema=z.object({
  address:z.string().trim().max(500),
  contentStatus:z.enum(['ready','custom']).default('custom'),
 }).strict().superRefine((v,ctx)=>{
+ if(v.quantity<minimumFor(v.equipment))ctx.addIssue({code:'custom',path:['quantity'],message:'El alquiler de gafas VR requiere mínimo 3 equipos.'});
  const d=new Date(`${v.date}T${v.start}:00-05:00`);
  if(!Number.isFinite(d.getTime())||d.toLocaleDateString('en-CA',{timeZone:'America/Bogota'})!==v.date||d.getTime()<=Date.now())ctx.addIssue({code:'custom',message:'Selecciona una fecha y hora futuras validas',path:['date']});
 });
@@ -71,7 +73,7 @@ export function calculate(v:RentalEvent,r:Rules,transport:number|null,overrides:
  const content=v.contentStatus==='ready'?(v.quantity<=r.contentConfig.upToQuantity?r.contentConfig.upToPrice:r.contentConfig.abovePrice):null;
  const contentLabel=v.contentStatus==='ready'?'Configuracion de contenido':'Contenido personalizado';
  const taxPercent=overrides.taxPercent??r.taxPercent;
- if(hardware==null)pending.push('Precio de visor para esta cantidad');
+ if(hardware==null)pending.push('Precio del equipo para esta cantidad');
  if(count==null||staff==null)pending.push('Operador VR obligatorio por definir');
  if(freight==null)pending.push('Transporte por cotizar');
  if(content==null)pending.push('Contenido personalizado por cotizar');
@@ -86,5 +88,5 @@ export function calculate(v:RentalEvent,r:Rules,transport:number|null,overrides:
 export type Estimate=ReturnType<typeof calculate>&{available:number;totalInventory:number;bufferProvisional:boolean;pricingId:string;equipmentName:string;event:RentalEvent};
 export const quoteStatus:Record<string,string>={draft:'Borrador',pending_confirmation:'Solicitud recibida',quote_sent:'Cotizacion enviada',issued:'Emitida',accepted:'Reservada',cancelled:'Cancelada',superseded:'Reemplazada',expired:'Vencida'};
 export const bookingStatus:Record<string,string>={confirmed:'Confirmada',in_service:'En evento',completed:'Completada',cancelled:'Cancelada'};
-export const assetStatus:Record<string,string>={ready:'Disponible',reserved:'Reservado',in_use:'En evento',maintenance:'Mantenimiento',quarantine:'Fuera de servicio',retired:'Fuera de servicio',unverified:'Pendiente de revision'};
+export const assetStatus:Record<string,string>={ready:'Disponible',reserved:'Reservado',in_use:'En evento',maintenance:'Mantenimiento',quarantine:'Fuera de servicio',retired:'Retirado definitivamente',unverified:'Pendiente de revision'};
 export const paymentStatus:Record<string,string>={UNPAID:'Sin pago',PARTIALLY_PAID:'Pago parcial',PAID:'Pagada',REFUNDED:'Reembolsada'};

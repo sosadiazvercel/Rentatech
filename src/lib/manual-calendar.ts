@@ -14,4 +14,4 @@ export const calendarEventSchema=z.object({
 });
 
 export type CalendarEventInput=z.infer<typeof calendarEventSchema>;
-export type CalendarEvent={id:string;title:string;start_at:string;end_at:string;location:string;notes:string};
+export type CalendarEvent={id:string;title:string;start_at:string;end_at:string;location:string;notes:string;source?:'manual'|'booking';lead_id?:string};

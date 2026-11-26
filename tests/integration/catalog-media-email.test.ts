@@ -12,6 +12,8 @@ import {sendQuoteEmail} from '@/server/email';
 import {sendLeadEmails} from '@/server/email';
 import {updateLead} from '@/server/leads';
 import {getPublicProducts} from '@/server/public-products';
+import {rentalContextSchema} from '@/lib/lead-schema';
+import {listCalendarEvents,deleteCalendarEvent} from '@/server/manual-calendar';
 import {GET,POST} from '@/app/api/v1/products/[code]/image/route';
 import type {AdminProduct} from '@/lib/catalog';
 
@@ -82,12 +84,13 @@ it('records provider errors and uncertain responses, and blocks retries past the
 
 const staff={id:'00000000-0000-4000-8000-000000000011',auth_user_id:'00000000-0000-4000-8000-000000000001',role:'admin' as const};
 function payload(p:AdminProduct,pricingId:string){return {id:p.id,expectedUpdatedAt:p.updatedAt,expectedPricingId:pricingId,code:p.code,name:p.name,slug:p.slug,brand:p.brand,description:p.description,summary:p.summary,categories:p.categories,specifications:p.specifications,published:p.published,active:p.active,featured:p.featured,sortOrder:p.sortOrder,tiers:p.tiers};}
-async function newProduct(code:string){return saveProduct({expectedPricingId:(await adminProducts()).pricingId,code,name:'Equipo de prueba '+code,slug:code.toLowerCase(),brand:'Marca de prueba',description:'Descripción editable',summary:'Resumen editable',categories:['Categoría de prueba'],specifications:[['Resolución','4K']],published:true,active:true,featured:true,sortOrder:30,tiers:[{min:3,max:15,unit:123000}]},staff);}
+async function newProduct(code:string){return saveProduct({expectedPricingId:(await adminProducts()).pricingId,code,name:'Equipo de prueba '+code,slug:code.toLowerCase(),brand:'Marca de prueba',description:'Descripción editable',summary:'Resumen editable',categories:['Categoría de prueba'],specifications:[['Resolución','4K']],published:true,active:true,featured:true,sortOrder:30,tiers:[{min:1,max:15,unit:123000}]},staff);}
 
 it('creates arbitrary products with editable content and prices; real units enable their quotations',async()=>{
  const created=await newProduct('CATALOGQA');
  let data=await adminProducts();let product=data.products.find(p=>p.id===created.id)!;
  expect((await getPublicProducts()).find(p=>p.code==='CATALOGQA')).toMatchObject({title:'Equipo de prueba CATALOGQA',brand:'Marca de prueba',text:'Descripción editable',specs:[['Resolución','4K']],categories:['Categoría de prueba'],price:expect.stringContaining('123.000')});
+ expect((await estimate({equipment:'CATALOGQA',quantity:1,days:1,date:'2037-10-15',start:'10:00',durationHours:8,city:'Bogota',address:'QA',contentStatus:'ready'})).hardware).toBe(123000);
  const event={equipment:'CATALOGQA',quantity:3,days:1,date:'2037-10-15',start:'10:00',durationHours:8,city:'Bogota',address:'QA',contentStatus:'ready'};
  expect((await estimate(event)).available).toBe(0);
  for(let i=0;i<3;i++)await mutate({action:'asset',equipment:'CATALOGQA',code:'CATALOGQA-'+i,serial:'',status:'ready',condition:'QA',notes:'Inventario de prueba'},staff);
@@ -146,6 +149,13 @@ it('follows all rental stages, stores private PDFs, reserves units and sends eac
  await save('confirmed',{paymentConfirmed:true,paymentReference:'COMPROBANTE-QA',technicianIds:[technician.id]});await sendLeadEmails(leadId);
  const booking=(await operationsData()).bookings.find(b=>b.snapshot.request.email==='qa@example.test'&&b.status==='confirmed');
  expect(booking).toBeDefined();expect(booking.technicians).toEqual([{id:technician.id,name:'Técnico seguimiento QA'}]);
+ expect(booking).toMatchObject({payment_status:'PAID',paid_cop:'1570000',balance_due_cop:'0'});
+ expect((await db.query('SELECT received_cop,reference FROM payment WHERE booking_id=$1',[booking.id])).rows).toEqual([{received_cop:'1570000',reference:'COMPROBANTE-QA'}]);
+ const context=rentalContextSchema.parse(Object.fromEntries(Object.keys(rentalContextSchema.shape).map(key=>[key,booking.snapshot.request[key]])));
+ await save('confirmed',{request:{...context,address:'Nueva dirección QA',nit:'900999888',notes:'Contexto actualizado'},paymentReference:'COMPROBANTE-QA'});
+ expect((await operationsData()).bookings.find(b=>b.id===booking.id).snapshot.request).toMatchObject({address:'Nueva dirección QA',nit:'900999888'});
+ expect((await listCalendarEvents('2035-01-01T00:00:00Z','2099-01-01T00:00:00Z')).find(item=>item.id===booking.id)?.location).toContain('Nueva dirección QA');
+ await expect(save('confirmed',{request:{...context,date:'2037-12-01'},paymentReference:'COMPROBANTE-QA'})).rejects.toMatchObject({code:'CONFIRMED_EVENT_LOCKED'});
  await expect(save('confirmed',{estimatedValue:1,paymentReference:'COMPROBANTE-QA'})).rejects.toMatchObject({code:'VALUE_LOCKED'});
  expect((await db.query('SELECT count(*)::int n FROM unit_allocation WHERE lead_id=$1 AND active',[leadId])).rows[0].n).toBe(3);
  await save('confirmed',{note:'Pago revisado',paymentReference:'COMPROBANTE-QA'});await sendLeadEmails(leadId);expect(fetcher).toHaveBeenCalledTimes(3);
@@ -179,7 +189,7 @@ it('rejects a busy technician without creating a partial reservation',async()=>{
  const first=await prepare('QUEST3'),second=await prepare('QUEST2');
  const confirm={expectedVersion:2,stage:'confirmed',paymentConfirmed:true,paymentReference:'QA',technicianIds:[technician.id]};
  await updateLead(first.leadId,{...first.base,...confirm},staff);
- await expect(updateLead(second.leadId,{...second.base,...confirm},staff)).rejects.toMatchObject({status:409});
+ await expect(updateLead(second.leadId,{...second.base,...confirm,paymentReference:'QA-busy-second'},staff)).rejects.toMatchObject({status:409});
  expect((await db.query('SELECT stage,stage_version FROM lead WHERE id=$1',[second.leadId])).rows[0]).toMatchObject({stage:'awaiting_payment',stage_version:2});
  expect((await db.query('SELECT 1 FROM unit_allocation WHERE lead_id=$1',[second.leadId])).rowCount).toBe(0);
  expect((await db.query('SELECT 1 FROM booking b JOIN quote q ON q.id=b.quote_id WHERE q.lead_id=$1',[second.leadId])).rowCount).toBe(0);
@@ -196,6 +206,10 @@ it('adds an older confirmed request to reservations when assigning its technicia
  await updateLead(saved.lead_id,{stage:'confirmed',expectedVersion:0,estimatedValue:1000000,ownerId:null,note:'',technicianIds:[technician.id]},staff);
  const booking=(await operationsData()).bookings.find(b=>b.quote_id===q.id);
  expect(booking).toBeDefined();expect(booking.assets).toHaveLength(3);expect(booking.technicians).toHaveLength(1);
+ expect(booking.payment_status).toBe('UNPAID');
  expect((await db.query('SELECT 1 FROM unit_allocation WHERE lead_id=$1 AND active',[saved.lead_id])).rowCount).toBe(3);
- await updateLead(saved.lead_id,{stage:'completed',expectedVersion:1,estimatedValue:1000000,ownerId:null,note:''},staff);
+ await deleteCalendarEvent({id:booking.id,source:'booking'},staff);
+ expect((await db.query('SELECT stage FROM lead WHERE id=$1',[saved.lead_id])).rows[0].stage).toBe('lost');
+ expect((await db.query('SELECT 1 FROM unit_allocation WHERE booking_id=$1 AND active',[booking.id])).rowCount).toBe(0);
+ expect((await listCalendarEvents('2039-01-01T00:00:00Z','2040-01-01T00:00:00Z')).some(item=>item.id===booking.id)).toBe(false);
 });
